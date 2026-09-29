@@ -23,7 +23,7 @@ export async function createPrograma(programa) {
       {
         code_program: programa.code_program.trim().toUpperCase(),
         name_program: programa.name_program.trim(),
-        grupo: parseInt(programa.grupo, 10) || 1,
+        
         numero_semestre: parseInt(programa.numero_semestre, 10) || 10,
       }
     ])
@@ -36,7 +36,7 @@ export async function createPrograma(programa) {
 export async function updatePrograma(code_program, changes) {
   const updateData = {}
   if (changes.name_program !== undefined) updateData.name_program = changes.name_program.trim()
-  if (changes.grupo !== undefined) updateData.grupo = parseInt(changes.grupo, 10)
+  
   if (changes.numero_semestre !== undefined) {
     updateData.numero_semestre = parseInt(changes.numero_semestre, 10) || 10
   }

@@ -21,7 +21,7 @@ CREATE TABLE public.asignaturas (
 CREATE TABLE public.programas (
     code_program VARCHAR(50) PRIMARY KEY,
     name_program VARCHAR(150) NOT NULL,
-    grupo INT NOT NULL DEFAULT 1
+    numero_semestre INT NOT NULL DEFAULT 10
 );
 
 -- 3. Tabla Intermedia: Pensum Académico (Malla Curricular)
@@ -116,7 +116,7 @@ CREATE TRIGGER trg_normalizar_asignaturas
 ```
 
 ### 3.3 Trigger de Normalización de Programas
-Garantiza códigos consistentes en mayúsculas y valida que el grupo sea un número válido.
+Garantiza códigos consistentes en mayúsculas y valida el número de semestres.
 
 ```sql
 CREATE OR REPLACE FUNCTION public.fn_normalizar_programas()
@@ -131,8 +131,8 @@ BEGIN
     IF NEW.name_program = '' THEN
         RAISE EXCEPTION 'El nombre del programa no puede estar vacío.';
     END IF;
-    IF NEW.grupo < 1 THEN
-        RAISE EXCEPTION 'El número de grupo debe ser al menos 1.';
+    IF NEW.numero_semestre < 1 OR NEW.numero_semestre > 20 THEN
+        RAISE EXCEPTION 'El número de semestres debe estar entre 1 y 20.';
     END IF;
     RETURN NEW;
 END;
@@ -181,7 +181,7 @@ src/
 
 2. **Gestor de Programas Académicos**:
    - Listado en cuadrícula y tabla con búsqueda por código o nombre.
-   - Creación y edición con validación de código, nombre y grupo.
+    - Creación y edición con validación de código, nombre y número de semestres.
    - Eliminación con protección y aviso de cascada.
    - Contador de asignaturas asociadas a cada programa.
 

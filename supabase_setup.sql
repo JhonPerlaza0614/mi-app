@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.asignaturas (
 CREATE TABLE IF NOT EXISTS public.programas (
     code_program VARCHAR(50) PRIMARY KEY,
     name_program VARCHAR(150) NOT NULL,
-    grupo INT NOT NULL DEFAULT 1
+    numero_semestre INT NOT NULL DEFAULT 10
 );
 
 -- Tabla Intermedia: Pensum Académico (Malla Curricular)
@@ -129,8 +129,8 @@ BEGIN
     IF NEW.name_program = '' THEN
         RAISE EXCEPTION 'El nombre del programa no puede estar vacío.';
     END IF;
-    IF NEW.grupo < 1 THEN
-        RAISE EXCEPTION 'El número de grupo debe ser al menos 1.';
+    IF NEW.numero_semestre < 1 OR NEW.numero_semestre > 20 THEN
+        RAISE EXCEPTION 'El número de semestres debe estar entre 1 y 20.';
     END IF;
     
     RETURN NEW;
@@ -152,10 +152,10 @@ DO $$
 BEGIN
     -- Solo si la tabla programas está vacía
     IF NOT EXISTS (SELECT 1 FROM public.programas LIMIT 1) THEN
-        INSERT INTO public.programas (code_program, name_program, grupo) VALUES
-            ('ING-SIS', 'Ingeniería de Sistemas y Computación', 1),
-            ('ING-IND', 'Ingeniería Industrial', 1),
-            ('ADM-EMP', 'Administración de Empresas', 2);
+        INSERT INTO public.programas (code_program, name_program) VALUES
+            ('ING-SIS', 'Ingeniería de Sistemas y Computación'),
+            ('ING-IND', 'Ingeniería Industrial'),
+            ('ADM-EMP', 'Administración de Empresas');
     END IF;
 
     -- Solo si la tabla asignaturas está vacía

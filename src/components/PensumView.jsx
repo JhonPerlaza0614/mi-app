@@ -54,8 +54,7 @@ export default function PensumView({
     if (!q) return programas
     return programas.filter(p =>
       p.name_program?.toLowerCase().includes(q) ||
-      p.code_program?.toLowerCase().includes(q) ||
-      p.grupo?.toString().toLowerCase().includes(q)
+      p.code_program?.toLowerCase().includes(q)
     )
   }, [programas, programSearch])
 
@@ -268,7 +267,7 @@ export default function PensumView({
                 placeholder={
                   currentProgram
                     ? `${currentProgram.code_program} — ${currentProgram.name_program}`
-                    : 'Buscar por nombre, código o grupo...'
+                    : 'Buscar por nombre o código...'
                 }
                 value={programSearch}
                 onChange={(e) => { setProgramSearch(e.target.value); setProgramDropdownOpen(true) }}
@@ -300,7 +299,7 @@ export default function PensumView({
                     >
                       <span className="prog-item-code">{prog.code_program}</span>
                       <span className="prog-item-name">{prog.name_program}</span>
-                      <span className="prog-item-meta">Grupo {prog.grupo} · {prog.numero_semestre || 10} Sem.</span>
+                      
                     </button>
                   ))
                 )}
@@ -339,7 +338,7 @@ export default function PensumView({
             <h1 className="program-banner-title">{currentProgram.name_program}</h1>
             <div className="program-tags-row">
               <span className="code-chip">Código: <strong>{currentProgram.code_program}</strong></span>
-              <span className="group-chip">Grupo: <strong>{currentProgram.grupo}</strong></span>
+              
               <span className="group-chip">Duración: <strong>{totalSemesters} Semestres</strong></span>
             </div>
           </div>

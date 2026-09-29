@@ -19,7 +19,7 @@ export default function ProgramasView({
   const [formData, setFormData] = useState({
     code_program: '',
     name_program: '',
-    grupo: 1,
+    
     numero_semestre: 10,
   })
 
@@ -46,7 +46,7 @@ export default function ProgramasView({
     setFormData({
       code_program: '',
       name_program: '',
-      grupo: 1,
+      
       numero_semestre: 10,
     })
     setIsModalOpen(true)
@@ -57,7 +57,7 @@ export default function ProgramasView({
     setFormData({
       code_program: prog.code_program,
       name_program: prog.name_program,
-      grupo: prog.grupo,
+      
       numero_semestre: prog.numero_semestre !== undefined && prog.numero_semestre !== null ? prog.numero_semestre : 10,
     })
     setIsModalOpen(true)
@@ -81,7 +81,7 @@ export default function ProgramasView({
       if (editingProgram) {
         await updatePrograma(editingProgram.code_program, {
           name_program: formData.name_program,
-          grupo: formData.grupo,
+          
           numero_semestre: numSemestres,
         })
         onShowToast('Programa actualizado correctamente', 'success')
@@ -128,7 +128,7 @@ export default function ProgramasView({
         <div>
           <h1 className="section-title">Programas Académicos (Carreras)</h1>
           <p className="section-description">
-            Gestiona los programas universitarios y sus grupos registrados en la base de datos.
+            Gestiona los programas universitarios en la base de datos.
           </p>
         </div>
         <button className="btn-primary" onClick={handleOpenCreateModal}>
@@ -178,7 +178,7 @@ export default function ProgramasView({
               <div key={prog.code_program} className="item-card">
                 <div className="item-card-header">
                   <div className="badge-code">{prog.code_program}</div>
-                  <div className="badge-group">Grupo {prog.grupo}</div>
+                  
                 </div>
 
                 <h3 className="item-card-title">{prog.name_program}</h3>
@@ -270,18 +270,7 @@ export default function ProgramasView({
                   />
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="grupo">Grupo *</label>
-                  <input
-                    id="grupo"
-                    type="number"
-                    min="1"
-                    value={formData.grupo}
-                    onChange={(e) => setFormData({ ...formData, grupo: e.target.value })}
-                    required
-                  />
-                  <small className="form-hint">Número identificador del grupo académico.</small>
-                </div>
+              
 
                 <div className="form-group">
                   <label htmlFor="numero_semestre">Número de Semestres de la Carrera *</label>
