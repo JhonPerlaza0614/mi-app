@@ -144,58 +144,5 @@ CREATE TRIGGER trg_normalizar_programas
     EXECUTE FUNCTION public.fn_normalizar_programas();
 
 
--- 4. DATOS INICIALES DE DEMOSTRACIÓN (Semilla Opcional)
--- ------------------------------------------------------------------------------
--- Inserta datos base si las tablas están vacías para poder explorar la aplicación inmediatamente.
-
-DO $$
-BEGIN
-    -- Solo si la tabla programas está vacía
-    IF NOT EXISTS (SELECT 1 FROM public.programas LIMIT 1) THEN
-        INSERT INTO public.programas (code_program, name_program) VALUES
-            ('ING-SIS', 'Ingeniería de Sistemas y Computación'),
-            ('ING-IND', 'Ingeniería Industrial'),
-            ('ADM-EMP', 'Administración de Empresas');
-    END IF;
-
-    -- Solo si la tabla asignaturas está vacía
-    IF NOT EXISTS (SELECT 1 FROM public.asignaturas LIMIT 1) THEN
-        INSERT INTO public.asignaturas (code_course, name_course) VALUES
-            ('MAT101', 'Cálculo Diferencial'),
-            ('MAT102', 'Álgebra Lineal'),
-            ('PROG1', 'Fundamentos de Programación'),
-            ('FIS101', 'Física Mecánica'),
-            ('MAT201', 'Cálculo Integral'),
-            ('PROG2', 'Programación Orientada a Objetos'),
-            ('EST101', 'Probabilidad y Estadística'),
-            ('BD101', 'Bases de Datos Relacionales'),
-            ('SO101', 'Sistemas Operativos'),
-            ('WEB101', 'Desarrollo Web Fullstack'),
-            ('ING-SW', 'Ingeniería de Software'),
-            ('RED101', 'Redes y Comunicaciones'),
-            ('ETI101', 'Ética Profesional'),
-            ('PROJ01', 'Proyecto de Grado I');
-    END IF;
-
-    -- Solo si pensum_academico está vacía
-    IF NOT EXISTS (SELECT 1 FROM public.pensum_academico LIMIT 1) THEN
-        INSERT INTO public.pensum_academico (code_program, code_course, semestre) VALUES
-            ('ING-SIS', 'MAT101', 1),
-            ('ING-SIS', 'PROG1', 1),
-            ('ING-SIS', 'MAT102', 1),
-            ('ING-SIS', 'FIS101', 2),
-            ('ING-SIS', 'MAT201', 2),
-            ('ING-SIS', 'PROG2', 2),
-            ('ING-SIS', 'EST101', 3),
-            ('ING-SIS', 'BD101', 3),
-            ('ING-SIS', 'SO101', 4),
-            ('ING-SIS', 'WEB101', 4),
-            ('ING-SIS', 'ING-SW', 5),
-            ('ING-SIS', 'RED101', 5),
-            ('ING-SIS', 'ETI101', 6),
-            ('ING-SIS', 'PROJ01', 7),
-            ('ING-IND', 'MAT101', 1),
-            ('ING-IND', 'MAT102', 1),
-            ('ING-IND', 'EST101', 2);
     END IF;
 END $$;
