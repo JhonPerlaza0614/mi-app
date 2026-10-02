@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { Plus, Search, Edit2, Trash2, Library, BookOpen, AlertTriangle, Award } from 'lucide-react'
-import { createAsignatura, updateAsignatura, deleteAsignatura } from '../services/academicService'
+import React, { useState, useEffect } from 'react'
+import { Plus, Search, Edit2, Trash2, Library, BookOpen, AlertTriangle, Award, Sparkles, Building2 } from 'lucide-react'
+import { createAsignatura, updateAsignatura, deleteAsignatura, getFacultades, createFacultad } from '../services/academicService'
 
 export default function AsignaturasView({ 
   asignaturas, 
@@ -14,19 +14,51 @@ export default function AsignaturasView({
   const [editingAsignatura, setEditingAsignatura] = useState(null)
   const [deletingAsignatura, setDeletingAsignatura] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [facultadesList, setFacultadesList] = useState([])
+
+  // Inline creación de nuevas facultades en la BD (id, nombre, descripcion)
+  const [isAddingNewFacultad, setIsAddingNewFacultad] = useState(false)
+  const [newFacultadName, setNewFacultadName] = useState('')
+  const [newFacultadDesc, setNewFacultadDesc] = useState('')
+  const [addingFacultadSubmitting, setAddingFacultadSubmitting] = useState(false)
+
+  // Cargar facultades desde la tabla 'Facultad' de la base de datos Supabase
+  const loadFacultadesFromDb = async () => {
+    try {
+      const data = await getFacultades()
+      if (data) {
+        setFacultadesList(data)
+      }
+    } catch (err) {
+      console.warn('Error al obtener facultades de la BD:', err)
+    }
+  }
+
+  useEffect(() => {
+    loadFacultadesFromDb()
+  }, [])
 
   // Form state
   const [formData, setFormData] = useState({
     code_course: '',
     name_course: '',
     credits: 3,
+    is_elective: false,
+    id_facultad: ''
   })
 
   // Filtered courses
-  const filteredAsignaturas = asignaturas.filter(a =>
-    a.code_course.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.name_course.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredAsignaturas = asignaturas.filter(a => {
+    const facObj = facultadesList.find(f => String(f.id) === String(a.id_facultad || a.facultad))
+    const facName = facObj ? (facObj.nombre || facObj.Nombre || '') : ''
+    const query = searchTerm.toLowerCase()
+    return (
+      a.code_course.toLowerCase().includes(query) ||
+      a.name_course.toLowerCase().includes(query) ||
+      facName.toLowerCase().includes(query) ||
+      (a.id_facultad && String(a.id_facultad).includes(query))
+    )
+  })
 
   // Find programs where this course is taught
   const getProgramsForCourse = (code_course) => {
@@ -35,58 +67,121 @@ export default function AsignaturasView({
     return programas.filter(p => progCodes.has(p.code_program))
   }
 
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = async (isElectivePreset = false) => {
     setEditingAsignatura(null)
+    setIsAddingNewFacultad(false)
+    setNewFacultadName('')
+    setNewFacultadDesc('')
+    
+    await loadFacultadesFromDb()
+    
     setFormData({
       code_course: '',
       name_course: '',
-      credits: 3,
+      credits: isElectivePreset ? '' : 3,
+      is_elective: isElectivePreset,
+      id_facultad: facultadesList[0]?.id ? String(facultadesList[0].id) : ''
     })
     setIsModalOpen(true)
   }
 
-  const handleOpenEditModal = (asig) => {
+  const handleOpenEditModal = async (asig) => {
     setEditingAsignatura(asig)
+    setIsAddingNewFacultad(false)
+    setNewFacultadName('')
+    setNewFacultadDesc('')
+    
+    await loadFacultadesFromDb()
+
     setFormData({
       code_course: asig.code_course,
       name_course: asig.name_course,
-      credits: asig.credits !== undefined && asig.credits !== null ? asig.credits : 0,
+      credits: asig.credits !== undefined && asig.credits !== null && asig.credits > 0 ? asig.credits : '',
+      is_elective: Boolean(asig.is_elective || asig.name_course?.toLowerCase().includes('electiv')),
+      id_facultad: asig.id_facultad ? String(asig.id_facultad) : ''
     })
     setIsModalOpen(true)
+  }
+
+  const handleToggleElective = (checked) => {
+    setFormData(prev => ({
+      ...prev,
+      is_elective: checked,
+      credits: checked && prev.credits === 3 ? '' : prev.credits
+    }))
+  }
+
+  const handleCreateNewFacultadInDb = async () => {
+    if (!newFacultadName.trim()) {
+      onShowToast('Ingresa el nombre de la nueva facultad para la BD', 'error')
+      return
+    }
+
+    setAddingFacultadSubmitting(true)
+    try {
+      const created = await createFacultad({ 
+        nombre: newFacultadName.trim(),
+        descripcion: newFacultadDesc.trim()
+      })
+      onShowToast(`Facultad "${newFacultadName}" guardada en la tabla 'Facultad' de la BD`, 'success')
+      setNewFacultadName('')
+      setNewFacultadDesc('')
+      setIsAddingNewFacultad(false)
+      
+      const updatedFacultades = await getFacultades()
+      setFacultadesList(updatedFacultades)
+      if (created && created.id) {
+        setFormData(prev => ({ ...prev, id_facultad: String(created.id) }))
+      }
+    } catch (err) {
+      onShowToast(`Error al guardar facultad en BD: ${err.message}`, 'error')
+    } finally {
+      setAddingFacultadSubmitting(false)
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!formData.name_course.trim()) {
+    const nameClean = formData.name_course.trim()
+
+    if (!nameClean) {
       onShowToast('El nombre de la asignatura es obligatorio', 'error')
       return
     }
 
-    const creditsNum = parseInt(formData.credits, 10)
-    if (isNaN(creditsNum) || creditsNum < 0) {
-      onShowToast('El número de créditos debe ser un número entero mayor o igual a 0', 'error')
-      return
+    let codeClean = formData.code_course.trim().toUpperCase()
+    if (!codeClean && formData.is_elective) {
+      const slug = nameClean.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()
+      codeClean = `ELE-${slug || Date.now().toString().slice(-4)}`
     }
+
+    const creditsParsed = parseInt(formData.credits, 10)
+    const creditsNum = isNaN(creditsParsed) || creditsParsed < 0 ? 0 : creditsParsed
 
     setSubmitting(true)
     try {
       if (editingAsignatura) {
         await updateAsignatura(editingAsignatura.code_course, {
-          name_course: formData.name_course,
+          name_course: nameClean,
           credits: creditsNum,
+          is_elective: formData.is_elective,
+          id_facultad: formData.id_facultad
         })
         onShowToast('Asignatura actualizada exitosamente', 'success')
       } else {
-        if (!formData.code_course.trim()) {
+        if (!codeClean) {
           onShowToast('El código de la asignatura es obligatorio', 'error')
           setSubmitting(false)
           return
         }
         await createAsignatura({
-          ...formData,
+          code_course: codeClean,
+          name_course: nameClean,
           credits: creditsNum,
+          is_elective: formData.is_elective,
+          id_facultad: formData.id_facultad
         })
-        onShowToast('Asignatura registrada exitosamente', 'success')
+        onShowToast(formData.is_elective ? 'Electiva registrada exitosamente' : 'Asignatura registrada exitosamente', 'success')
       }
       setIsModalOpen(false)
       onRefresh()
@@ -119,13 +214,19 @@ export default function AsignaturasView({
         <div>
           <h1 className="section-title">Banco Global de Asignaturas (Materias)</h1>
           <p className="section-description">
-            Gestiona el catálogo de materias disponibles para ser incorporadas en cualquier pensum académico.
+            Gestiona el catálogo de materias y electivas disponibles, asociadas directamente a las facultades de la Base de Datos.
           </p>
         </div>
-        <button className="btn-primary" onClick={handleOpenCreateModal}>
-          <Plus size={18} />
-          <span>Nueva Asignatura</span>
-        </button>
+        <div className="section-header-actions" style={{ display: 'flex', gap: '0.75rem' }}>
+          <button className="btn-secondary" onClick={() => handleOpenCreateModal(true)} title="Crear una materia electiva">
+            <Sparkles size={18} className="text-purple" />
+            <span>+ Crear Electiva</span>
+          </button>
+          <button className="btn-primary" onClick={() => handleOpenCreateModal(false)}>
+            <Plus size={18} />
+            <span>Nueva Asignatura</span>
+          </button>
+        </div>
       </div>
 
       {/* Control Bar */}
@@ -134,7 +235,7 @@ export default function AsignaturasView({
           <Search size={18} className="search-icon" />
           <input
             type="text"
-            placeholder="Buscar por código o nombre de materia..."
+            placeholder="Buscar por código, nombre o facultad de la BD..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -142,7 +243,7 @@ export default function AsignaturasView({
         <div className="stats-pill">
           <span>Total materias: <strong>{asignaturas.length}</strong></span>
           <span className="stats-separator">•</span>
-          <span>Créditos en catálogo: <strong>{asignaturas.reduce((sum, a) => sum + (a.credits || 0), 0)}</strong></span>
+          <span>Facultades en BD: <strong>{facultadesList.length}</strong></span>
         </div>
       </div>
 
@@ -157,7 +258,7 @@ export default function AsignaturasView({
               : 'Aún no hay asignaturas registradas en el catálogo. Crea una para comenzar.'}
           </p>
           {!searchTerm && (
-            <button className="btn-primary" onClick={handleOpenCreateModal}>
+            <button className="btn-primary" onClick={() => handleOpenCreateModal(false)}>
               <Plus size={16} /> Crear primera asignatura
             </button>
           )}
@@ -166,14 +267,29 @@ export default function AsignaturasView({
         <div className="cards-grid">
           {filteredAsignaturas.map((asig) => {
             const taughtPrograms = getProgramsForCourse(asig.code_course)
+            const isElective = asig.is_elective || asig.name_course?.toLowerCase().includes('electiv')
+            const facObj = facultadesList.find(f => String(f.id) === String(asig.id_facultad))
+            const facDisplayName = facObj ? (facObj.nombre || facObj.Nombre) : (asig.id_facultad ? `Facultad ID ${asig.id_facultad}` : null)
             return (
               <div key={asig.code_course} className="item-card course-card">
                 <div className="item-card-header">
-                  <div className="badge-code badge-course">{asig.code_course}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <div className="badge-code badge-course">{asig.code_course}</div>
+                    {isElective && (
+                      <span className="pensum-elective-pill" title="Asignatura Electiva">
+                        <Sparkles size={11} /> Electiva
+                      </span>
+                    )}
+                    {facDisplayName && (
+                      <span className="badge-group" title="Facultad de la BD" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                        <Building2 size={11} /> {facDisplayName}
+                      </span>
+                    )}
+                  </div>
                   <div className="header-badges-right">
                     <span className="badge-credits" title="Créditos académicos">
                       <Award size={12} />
-                      {asig.credits ?? 0} {asig.credits === 1 ? 'crédito' : 'créditos'}
+                      {asig.credits && asig.credits > 0 ? `${asig.credits} ${asig.credits === 1 ? 'crédito' : 'créditos'}` : '? créditos'}
                     </span>
                     <div className="badge-count" title="Presente en estos programas">
                       {taughtPrograms.length} {taughtPrograms.length === 1 ? 'carrera' : 'carreras'}
@@ -198,7 +314,7 @@ export default function AsignaturasView({
                 <div className="item-card-actions">
                   <span className="course-credits-meta">
                     <Award size={14} className="text-primary" />
-                    <strong>{asig.credits ?? 0}</strong> {asig.credits === 1 ? 'crédito académico' : 'créditos académicos'}
+                    <strong>{asig.credits && asig.credits > 0 ? asig.credits : '?'}</strong> {asig.credits === 1 ? 'crédito académico' : 'créditos académicos'}
                   </span>
                   <div className="action-buttons-group">
                     <button
@@ -228,26 +344,133 @@ export default function AsignaturasView({
         <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-header">
-              <h2>{editingAsignatura ? 'Editar Asignatura' : 'Nueva Asignatura'}</h2>
+              <h2>{editingAsignatura ? 'Editar Asignatura' : formData.is_elective ? 'Nueva Electiva' : 'Nueva Asignatura'}</h2>
               <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
+                {/* Apartado para Settear 'Es Electiva: Verdadero/Falso' y Seleccionar Grupo traído de la BD */}
+                <div className="elective-group-setting-card">
+                  <div className="setting-row">
+                    <label className="checkbox-setting-label">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_elective}
+                        onChange={(e) => handleToggleElective(e.target.checked)}
+                        className="checkbox-input-custom"
+                      />
+                      <span className="checkbox-label-text">
+                        <Sparkles size={16} className={formData.is_elective ? 'text-purple' : 'text-muted'} />
+                        <strong>Es Electiva:</strong>{' '}
+                        {formData.is_elective ? (
+                          <span className="badge-true">Verdadero (Sí)</span>
+                        ) : (
+                          <span className="badge-false">Falso (No)</span>
+                        )}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                    <div className="group-label-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label htmlFor="modal_facultad" className="setting-select-label">
+                        Facultad de la BD <small className="text-muted">(Tabla 'Facultad')</small>
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-link"
+                        onClick={() => setIsAddingNewFacultad(!isAddingNewFacultad)}
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {isAddingNewFacultad ? 'Cancelar' : '+ Agregar Nueva Facultad a BD'}
+                      </button>
+                    </div>
+
+                    {isAddingNewFacultad ? (
+                      <div className="new-group-inline-form" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.4rem' }}>
+                        <input
+                          type="text"
+                          placeholder="Nombre de la facultad (ej. Facultad de Ingeniería)"
+                          value={newFacultadName}
+                          onChange={(e) => setNewFacultadName(e.target.value)}
+                          className="select-input"
+                          autoFocus
+                        />
+                        <input
+                          type="text"
+                          placeholder="Descripción de la facultad (opcional)"
+                          value={newFacultadDesc}
+                          onChange={(e) => setNewFacultadDesc(e.target.value)}
+                          className="select-input"
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.2rem' }}>
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm"
+                            onClick={() => setIsAddingNewFacultad(false)}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-primary btn-sm"
+                            onClick={handleCreateNewFacultadInDb}
+                            disabled={addingFacultadSubmitting || !newFacultadName.trim()}
+                          >
+                            {addingFacultadSubmitting ? 'Guardando...' : 'Guardar en BD'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select
+                        id="modal_id_facultad"
+                        value={formData.id_facultad}
+                        onChange={(e) => setFormData({ ...formData, id_facultad: e.target.value })}
+                        className="select-input"
+                        style={{ marginTop: '0.35rem' }}
+                      >
+                        <option value="">-- Seleccionar Facultad de la BD --</option>
+                        {facultadesList.length === 0 ? (
+                          <option value="" disabled>No hay facultades en la base de datos (+ Crear Nueva Facultad)</option>
+                        ) : (
+                          facultadesList.map((f, idx) => {
+                            const val = f.id ? String(f.id) : ''
+                            const nameText = f.nombre || f.Nombre || f.name || `Facultad ${f.id || idx + 1}`
+                            const descText = f.descripcion || f.Descripcion || f.descripción || ''
+                            const label = descText ? `${nameText} — ${descText}` : nameText
+                            return (
+                              <option key={f.id || idx} value={val}>
+                                {label} (ID: {f.id})
+                              </option>
+                            )
+                          })
+                        )}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label htmlFor="code_course">Código de la Asignatura *</label>
+                  <label htmlFor="code_course">
+                    Código de la Asignatura {formData.is_elective ? '(Opcional)' : '*'}
+                  </label>
                   <input
                     id="code_course"
                     type="text"
-                    placeholder="Ej. MAT101, PROG-201, BD102"
+                    placeholder={formData.is_elective ? "Vacío (se generará código único si lo dejas en blanco)" : "Ej. MAT101, PROG-201, BD102"}
                     value={formData.code_course}
                     onChange={(e) => setFormData({ ...formData, code_course: e.target.value })}
                     disabled={!!editingAsignatura}
-                    required
+                    required={!formData.is_elective && !editingAsignatura}
                   />
                   {editingAsignatura ? (
                     <small className="form-hint">El código de la materia es clave primaria y no puede modificarse.</small>
                   ) : (
-                    <small className="form-hint">El trigger de Supabase convertirá automáticamente las letras a mayúsculas.</small>
+                    <small className="form-hint">
+                      {formData.is_elective
+                        ? 'Si lo dejas vacío, se autogenerará un código único para esta electiva.'
+                        : 'El trigger de Supabase convertirá las letras a mayúsculas.'}
+                    </small>
                   )}
                 </div>
 
@@ -256,27 +479,26 @@ export default function AsignaturasView({
                   <input
                     id="name_course"
                     type="text"
-                    placeholder="Ej. Cálculo Diferencial, Bases de Datos Relacionales"
+                    placeholder={formData.is_elective ? "Ej. Inteligencia Artificial, Robótica, Marketing Digital" : "Ej. Cálculo Diferencial, Bases de Datos"}
                     value={formData.name_course}
                     onChange={(e) => setFormData({ ...formData, name_course: e.target.value })}
                     required
+                    autoFocus
                   />
+                  <small className="form-hint">Ingresa el nombre real de la asignatura o materia electiva.</small>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="credits">Número de Créditos *</label>
+                  <label htmlFor="credits">Número de Créditos</label>
                   <input
                     id="credits"
-                    type="number"
-                    min="0"
-                    max="30"
-                    placeholder="Ej. 3"
+                    type="text"
+                    placeholder="?"
                     value={formData.credits}
                     onChange={(e) => setFormData({ ...formData, credits: e.target.value })}
-                    required
                   />
                   <small className="form-hint">
-                    Cantidad de créditos académicos de esta materia (número entero de 0 o más).
+                    Muestra '?' si los créditos están vacíos o sin definir aún.
                   </small>
                 </div>
               </div>
@@ -290,8 +512,12 @@ export default function AsignaturasView({
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Guardando...' : editingAsignatura ? 'Actualizar' : 'Crear Asignatura'}
+                <button
+                  type="submit"
+                  className={formData.is_elective ? 'btn-primary btn-purple' : 'btn-primary'}
+                  disabled={submitting || (!formData.name_course.trim())}
+                >
+                  {submitting ? 'Guardando...' : editingAsignatura ? 'Actualizar' : formData.is_elective ? 'Crear Electiva' : 'Crear Asignatura'}
                 </button>
               </div>
             </form>

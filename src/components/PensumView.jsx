@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   Plus,
   BookOpen,
@@ -15,7 +15,8 @@ import {
 import {
   addCourseToPensum,
   updateCourseSemester,
-  removeCourseFromPensum
+  removeCourseFromPensum,
+  createAsignatura
 } from '../services/academicService'
 
 export default function PensumView({
@@ -36,6 +37,12 @@ export default function PensumView({
   const [submitting, setSubmitting] = useState(false)
   const [movingCourse, setMovingCourse] = useState(null) // for changing semester modal
   const [targetSemester, setTargetSemester] = useState(1)
+
+  // Elective form mode & state in modal
+  const [addMode, setAddMode] = useState('catalog') // 'catalog' | 'elective'
+  const [electiveCode, setElectiveCode] = useState('')
+  const [electiveName, setElectiveName] = useState('')
+  const [electiveCredits, setElectiveCredits] = useState('')
 
   // Program search combobox
   const [programSearch, setProgramSearch] = useState('')
@@ -130,11 +137,38 @@ export default function PensumView({
     )
   }, [availableCourses, courseSearchModal])
 
+  // Generador de nombre consecutivo para electivas (Electiva Profesional I, II, III...)
+  const getConsecutiveElectiveName = useCallback(() => {
+    if (!currentProgram) return 'Electiva Profesional I'
+    const programPensum = pensumList.filter(item => item.code_program === currentProgram.code_program)
+    const existingElectives = programPensum.filter(item => {
+      const name = item.name_course?.toLowerCase() || ''
+      const code = item.code_course?.toLowerCase() || ''
+      return name.includes('electiv') || code.startsWith('ele')
+    })
+
+    const count = existingElectives.length + 1
+    const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV']
+    const roman = romanNumerals[count - 1] || `${count}`
+    return `Electiva Profesional ${roman}`
+  }, [currentProgram, pensumList])
+
+  const handleSwitchToElective = () => {
+    setAddMode('elective')
+    setElectiveCode('')
+    setElectiveName(getConsecutiveElectiveName())
+    setElectiveCredits('')
+  }
+
   // Handle open add course modal
   const handleOpenAddModal = (semesterNum = 1) => {
     setSelectedSemesterForAdd(semesterNum)
     setSelectedCourseForAdd(availableCourses[0]?.code_course || '')
     setCourseSearchModal('')
+    setAddMode('catalog')
+    setElectiveCode('')
+    setElectiveName(getConsecutiveElectiveName())
+    setElectiveCredits('')
     setIsAddModalOpen(true)
   }
 
@@ -142,19 +176,56 @@ export default function PensumView({
   const handleAddCourse = async (e) => {
     e.preventDefault()
     if (!currentProgram) return
-    if (!selectedCourseForAdd) {
-      onShowToast('Selecciona una asignatura para agregar', 'error')
-      return
-    }
 
     setSubmitting(true)
     try {
-      await addCourseToPensum({
-        code_program: currentProgram.code_program,
-        code_course: selectedCourseForAdd,
-        semestre: selectedSemesterForAdd
-      })
-      onShowToast(`Asignatura agregada al Semestre ${selectedSemesterForAdd}`, 'success')
+      if (addMode === 'elective') {
+        const nameClean = electiveName.trim() || getConsecutiveElectiveName()
+        let codeClean = electiveCode.trim().toUpperCase()
+
+        // Si el código está vacío, generar un código derivado automáticamente
+        if (!codeClean) {
+          const romanPart = nameClean.split(' ').pop().toUpperCase()
+          codeClean = `ELE-PROF-${romanPart}`.replace(/[^A-Z0-9-]/g, '')
+          if (!codeClean || codeClean === 'ELE-PROF-') {
+            codeClean = `ELE-${Date.now().toString().slice(-4)}`
+          }
+        }
+
+        const parsedCredits = parseInt(electiveCredits, 10)
+        const creditsNum = isNaN(parsedCredits) || parsedCredits < 0 ? 0 : parsedCredits
+
+        // Check if course already exists in asignaturas catalog
+        const existingInCatalog = asignaturas.find(a => a.code_course.toUpperCase() === codeClean)
+        if (!existingInCatalog) {
+          await createAsignatura({
+            code_course: codeClean,
+            name_course: nameClean,
+            credits: creditsNum
+          })
+        }
+
+        await addCourseToPensum({
+          code_program: currentProgram.code_program,
+          code_course: codeClean,
+          semestre: selectedSemesterForAdd
+        })
+        onShowToast(`Electiva "${nameClean}" agregada al Semestre ${selectedSemesterForAdd}`, 'success')
+      } else {
+        if (!selectedCourseForAdd) {
+          onShowToast('Selecciona una asignatura para agregar', 'error')
+          setSubmitting(false)
+          return
+        }
+
+        await addCourseToPensum({
+          code_program: currentProgram.code_program,
+          code_course: selectedCourseForAdd,
+          semestre: selectedSemesterForAdd
+        })
+        onShowToast(`Asignatura agregada al Semestre ${selectedSemesterForAdd}`, 'success')
+      }
+
       setIsAddModalOpen(false)
       onRefresh()
     } catch (err) {
@@ -424,59 +495,67 @@ export default function PensumView({
                       </button>
                     </div>
                   ) : (
-                    coursesInSem.map((item) => (
-                      <div key={item.code_course} className="pensum-course-card">
-                        <div className="pensum-course-card-top">
-                          <div className="pensum-card-badge-row">
-                            <span className="course-code-pill">{item.code_course}</span>
-                            <span className="pensum-credit-pill" title={`${item.credits ?? 0} créditos académicos`}>
-                              {item.credits ?? 0} {item.credits === 1 ? 'créd' : 'créds'}
-                            </span>
+                    coursesInSem.map((item) => {
+                      const isElective = item.name_course?.toLowerCase().includes('electiv') || item.code_course?.toLowerCase().startsWith('ele')
+                      return (
+                        <div key={item.code_course} className="pensum-course-card">
+                          <div className="pensum-course-card-top">
+                            <div className="pensum-card-badge-row">
+                              <span className="course-code-pill">{item.code_course}</span>
+                              {isElective && (
+                                <span className="pensum-elective-pill" title="Asignatura Electiva">
+                                  <Sparkles size={10} /> Electiva
+                                </span>
+                              )}
+                              <span className="pensum-credit-pill" title={`${item.credits ?? 0} créditos académicos`}>
+                                {item.credits ?? 0} {item.credits === 1 ? 'créd' : 'créds'}
+                              </span>
+                            </div>
+                            <div className="pensum-card-tools print-hide">
+                              <button
+                                className="btn-card-tool"
+                                onClick={() => {
+                                  setMovingCourse(item)
+                                  setTargetSemester(item.semestre)
+                                }}
+                                title="Cambiar de semestre"
+                              >
+                                <ArrowRightLeft size={13} />
+                              </button>
+                              <button
+                                className="btn-card-tool tool-danger"
+                                onClick={() => handleRemoveCourse(item)}
+                                title="Quitar del pensum"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="pensum-card-tools print-hide">
+
+                          <h4 className="pensum-course-name">{item.name_course}</h4>
+
+                          <div className="pensum-card-navigation print-hide">
                             <button
-                              className="btn-card-tool"
-                              onClick={() => {
-                                setMovingCourse(item)
-                                setTargetSemester(item.semestre)
-                              }}
-                              title="Cambiar de semestre"
+                              className="btn-nav-shift"
+                              disabled={semNum <= 1}
+                              onClick={() => handleShiftSemester(item, -1)}
+                              title="Mover a semestre anterior"
                             >
-                              <ArrowRightLeft size={13} />
+                              <ChevronLeft size={14} />
                             </button>
+                            <span className="sem-indicator">S{semNum}</span>
                             <button
-                              className="btn-card-tool tool-danger"
-                              onClick={() => handleRemoveCourse(item)}
-                              title="Quitar del pensum"
+                              className="btn-nav-shift"
+                              disabled={semNum >= totalSemesters}
+                              onClick={() => handleShiftSemester(item, 1)}
+                              title="Mover a semestre siguiente"
                             >
-                              <Trash2 size={13} />
+                              <ChevronRight size={14} />
                             </button>
                           </div>
                         </div>
-
-                        <h4 className="pensum-course-name">{item.name_course}</h4>
-
-                        <div className="pensum-card-navigation print-hide">
-                          <button
-                            className="btn-nav-shift"
-                            disabled={semNum <= 1}
-                            onClick={() => handleShiftSemester(item, -1)}
-                            title="Mover a semestre anterior"
-                          >
-                            <ChevronLeft size={14} />
-                          </button>
-                          <span className="sem-indicator">S{semNum}</span>
-                          <button
-                            className="btn-nav-shift"
-                            disabled={semNum >= totalSemesters}
-                            onClick={() => handleShiftSemester(item, 1)}
-                            title="Mover a semestre siguiente"
-                          >
-                            <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </div>
@@ -511,58 +590,143 @@ export default function PensumView({
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label>Seleccionar Asignatura del Catálogo</label>
-                  <input
-                    type="text"
-                    placeholder="Filtrar por código o nombre..."
-                    value={courseSearchModal}
-                    onChange={(e) => setCourseSearchModal(e.target.value)}
-                    className="search-input-modal"
-                  />
+                {/* Seleccionador de Modo: Catálogo vs Electiva (Campos Vacíos) */}
+                <div className="add-mode-tabs">
+                  <button
+                    type="button"
+                    className={`add-mode-tab ${addMode === 'catalog' ? 'active' : ''}`}
+                    onClick={() => setAddMode('catalog')}
+                  >
+                    <BookOpen size={16} />
+                    <span>Del Catálogo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`add-mode-tab mode-elective ${addMode === 'elective' ? 'active' : ''}`}
+                    onClick={handleSwitchToElective}
+                  >
+                    <Sparkles size={16} />
+                    <span>Elegir que sea Electiva</span>
+                  </button>
                 </div>
 
-                <div className="course-picker-list">
-                  {filteredAvailableCourses.length === 0 ? (
-                    <div className="empty-picker-notice">
-                      <p>No hay asignaturas disponibles que coincidan con la búsqueda.</p>
+                {addMode === 'catalog' ? (
+                  <>
+                    <div className="form-group">
+                      <label>Seleccionar Asignatura del Catálogo</label>
+                      <input
+                        type="text"
+                        placeholder="Filtrar por código o nombre..."
+                        value={courseSearchModal}
+                        onChange={(e) => setCourseSearchModal(e.target.value)}
+                        className="search-input-modal"
+                      />
+                    </div>
+
+                    <div className="course-picker-list">
+                      {filteredAvailableCourses.length === 0 ? (
+                        <div className="empty-picker-notice">
+                          <p>No hay asignaturas disponibles que coincidan con la búsqueda.</p>
+                          <button
+                            type="button"
+                            className="btn-link"
+                            onClick={() => {
+                              setIsAddModalOpen(false)
+                              onNavigateToAsignaturas()
+                            }}
+                          >
+                            Crear una nueva asignatura en el Banco
+                          </button>
+                        </div>
+                      ) : (
+                        filteredAvailableCourses.map((c) => (
+                          <label
+                            key={c.code_course}
+                            className={`course-picker-item ${selectedCourseForAdd === c.code_course ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              name="coursePicker"
+                              value={c.code_course}
+                              checked={selectedCourseForAdd === c.code_course}
+                              onChange={() => setSelectedCourseForAdd(c.code_course)}
+                            />
+                            <div className="picker-item-details">
+                              <div className="picker-item-info">
+                                <span className="picker-code">{c.code_course}</span>
+                                <span className="picker-name">{c.name_course}</span>
+                              </div>
+                              <span className="picker-credits-tag">
+                                {c.credits && c.credits > 0 ? `${c.credits} ${c.credits === 1 ? 'crédito' : 'créditos'}` : '? créditos'}
+                              </span>
+                            </div>
+                          </label>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="catalog-elective-shortcut">
+                      <span>¿Quieres agregar una electiva personalizada?</span>
                       <button
                         type="button"
-                        className="btn-link"
-                        onClick={() => {
-                          setIsAddModalOpen(false)
-                          onNavigateToAsignaturas()
-                        }}
+                        className="btn-shortcut-elective"
+                        onClick={handleSwitchToElective}
                       >
-                        Crear una nueva asignatura ahora
+                        <Sparkles size={14} /> Elegir que sea Electiva (Campos con ?)
                       </button>
                     </div>
-                  ) : (
-                    filteredAvailableCourses.map((c) => (
-                      <label
-                        key={c.code_course}
-                        className={`course-picker-item ${selectedCourseForAdd === c.code_course ? 'selected' : ''}`}
-                      >
-                        <input
-                          type="radio"
-                          name="coursePicker"
-                          value={c.code_course}
-                          checked={selectedCourseForAdd === c.code_course}
-                          onChange={() => setSelectedCourseForAdd(c.code_course)}
-                        />
-                        <div className="picker-item-details">
-                          <div className="picker-item-info">
-                            <span className="picker-code">{c.code_course}</span>
-                            <span className="picker-name">{c.name_course}</span>
-                          </div>
-                          <span className="picker-credits-tag">
-                            {c.credits ?? 0} {c.credits === 1 ? 'crédito' : 'créditos'}
-                          </span>
-                        </div>
-                      </label>
-                    ))
-                  )}
-                </div>
+                  </>
+                ) : (
+                  /* Formulario de Asignatura Electiva */
+                  <div className="elective-form-card">
+                    <div className="elective-info-banner">
+                      <Sparkles size={18} className="text-purple" />
+                      <div>
+                        <strong>Campos para Asignatura Electiva</strong>
+                        <p>Nombre consecutivo ("Electiva Profesional I, II..."), código vacío y créditos con '?'.</p>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="modal_elective_code">Código de la Electiva</label>
+                      <input
+                        id="modal_elective_code"
+                        type="text"
+                        placeholder="Vacío (se asignará código automático si lo dejas en blanco)"
+                        value={electiveCode}
+                        onChange={(e) => setElectiveCode(e.target.value)}
+                      />
+                      <small className="form-hint">Puedes dejarlo vacío o escribir un código personalizado.</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="modal_elective_name">Nombre de la Electiva *</label>
+                      <input
+                        id="modal_elective_name"
+                        type="text"
+                        placeholder="Ej. Electiva Profesional I"
+                        value={electiveName}
+                        onChange={(e) => setElectiveName(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                      <small className="form-hint">Nombre consecutivo asignado (editable).</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="modal_elective_credits">Número de Créditos</label>
+                      <input
+                        id="modal_elective_credits"
+                        type="text"
+                        placeholder="?"
+                        value={electiveCredits}
+                        onChange={(e) => setElectiveCredits(e.target.value)}
+                      />
+                      <small className="form-hint">Muestra '?' por defecto si está vacío o sin definir.</small>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer">
@@ -576,10 +740,18 @@ export default function PensumView({
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary"
-                  disabled={submitting || !selectedCourseForAdd}
+                  className={addMode === 'elective' ? 'btn-primary btn-purple' : 'btn-primary'}
+                  disabled={
+                    submitting ||
+                    (addMode === 'catalog' && !selectedCourseForAdd) ||
+                    (addMode === 'elective' && !electiveName.trim())
+                  }
                 >
-                  {submitting ? 'Asignando...' : 'Asignar al Semestre'}
+                  {submitting
+                    ? 'Guardando...'
+                    : addMode === 'elective'
+                    ? 'Crear Electiva y Asignar'
+                    : 'Asignar al Semestre'}
                 </button>
               </div>
             </form>
