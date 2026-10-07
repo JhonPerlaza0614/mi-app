@@ -17,28 +17,43 @@ export async function getProgramas() {
 }
 
 export async function createPrograma(programa) {
+  const insertPayload = {
+    code_program: programa.code_program.trim().toUpperCase(),
+    name_program: programa.name_program.trim(),
+    numero_semestre: parseInt(programa.numero_semestre, 10) || 10,
+  }
+  if (programa.id_facultad_programa) {
+    insertPayload.id_facultad_programa = parseInt(programa.id_facultad_programa, 10)
+  }
+
   const { data, error } = await supabase
     .from('programas')
-    .insert([
-      {
-        code_program: programa.code_program.trim().toUpperCase(),
-        name_program: programa.name_program.trim(),
-        
-        numero_semestre: parseInt(programa.numero_semestre, 10) || 10,
-      }
-    ])
+    .insert([insertPayload])
     .select()
 
-  if (error) throw error
+  if (error) {
+    if (insertPayload.id_facultad_programa) {
+      delete insertPayload.id_facultad_programa
+      const { data: fbData, error: fbError } = await supabase
+        .from('programas')
+        .insert([insertPayload])
+        .select()
+      if (fbError) throw error
+      return fbData?.[0]
+    }
+    throw error
+  }
   return data?.[0]
 }
 
 export async function updatePrograma(code_program, changes) {
   const updateData = {}
   if (changes.name_program !== undefined) updateData.name_program = changes.name_program.trim()
-  
   if (changes.numero_semestre !== undefined) {
     updateData.numero_semestre = parseInt(changes.numero_semestre, 10) || 10
+  }
+  if (changes.id_facultad_programa !== undefined) {
+    updateData.id_facultad_programa = changes.id_facultad_programa ? parseInt(changes.id_facultad_programa, 10) : null
   }
 
   const { data, error } = await supabase
@@ -47,7 +62,18 @@ export async function updatePrograma(code_program, changes) {
     .eq('code_program', code_program)
     .select()
 
-  if (error) throw error
+  if (error) {
+    console.warn('Error al actualizar programa, probando sin id_facultad_programa:', error)
+    const fallbackUpdate = { ...updateData }
+    delete fallbackUpdate.id_facultad_programa
+    const { data: fbData, error: fbError } = await supabase
+      .from('programas')
+      .update(fallbackUpdate)
+      .eq('code_program', code_program)
+      .select()
+    if (fbError) throw error
+    return fbData?.[0]
+  }
   return data?.[0]
 }
 
@@ -82,6 +108,8 @@ export async function createAsignatura(asignatura) {
     credits: isNaN(creditsVal) ? 0 : Math.max(0, creditsVal),
   }
   if (asignatura.is_elective !== undefined) payload.is_elective = Boolean(asignatura.is_elective)
+  if (asignatura.es_complementaria !== undefined) payload.es_complementaria = Boolean(asignatura.es_complementaria)
+  if (asignatura.es_basica !== undefined) payload.es_basica = Boolean(asignatura.es_basica)
   if (asignatura.id_facultad !== undefined && asignatura.id_facultad !== null && asignatura.id_facultad !== '') {
     const facId = parseInt(asignatura.id_facultad, 10)
     if (!isNaN(facId)) payload.id_facultad = facId
@@ -94,12 +122,14 @@ export async function createAsignatura(asignatura) {
 
   if (error) {
     console.warn('Error en inserción completa de asignaturas:', error)
-    // Fallback 1: Probar sin id_facultad si la columna no existe aún
-    const payloadNoFac = { ...payload }
-    delete payloadNoFac.id_facultad
+    // Fallback 1: Probar sin es_complementaria, es_basica ni id_facultad si las columnas no existen aún
+    const payloadNoNewCols = { ...payload }
+    delete payloadNoNewCols.es_complementaria
+    delete payloadNoNewCols.es_basica
+    delete payloadNoNewCols.id_facultad
     const { data: fbData1, error: fbError1 } = await supabase
       .from('asignaturas')
-      .insert([payloadNoFac])
+      .insert([payloadNoNewCols])
       .select()
 
     if (!fbError1 && fbData1) return fbData1[0]
@@ -130,6 +160,8 @@ export async function updateAsignatura(code_course, changes) {
     updateData.credits = isNaN(creditsVal) ? 0 : Math.max(0, creditsVal)
   }
   if (changes.is_elective !== undefined) updateData.is_elective = Boolean(changes.is_elective)
+  if (changes.es_complementaria !== undefined) updateData.es_complementaria = Boolean(changes.es_complementaria)
+  if (changes.es_basica !== undefined) updateData.es_basica = Boolean(changes.es_basica)
   if (changes.id_facultad !== undefined) {
     const facId = parseInt(changes.id_facultad, 10)
     updateData.id_facultad = !isNaN(facId) ? facId : null
@@ -146,6 +178,7 @@ export async function updateAsignatura(code_course, changes) {
     const cleanUpdate = {}
     if (changes.name_course !== undefined) cleanUpdate.name_course = changes.name_course.trim()
     if (changes.credits !== undefined) cleanUpdate.credits = updateData.credits
+    if (changes.is_elective !== undefined) cleanUpdate.is_elective = updateData.is_elective
     const { data: fbData, error: fbError } = await supabase
       .from('asignaturas')
       .update(cleanUpdate)

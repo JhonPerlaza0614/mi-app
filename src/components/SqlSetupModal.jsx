@@ -11,6 +11,8 @@ export default function SqlSetupModal({ isOpen, onClose, onRefreshData }) {
 
   const sqlScript = `-- 0. Asegurar columnas nuevas en asignaturas y programas
 ALTER TABLE public.asignaturas ADD COLUMN IF NOT EXISTS credits int4 DEFAULT 0;
+ALTER TABLE public.asignaturas ADD COLUMN IF NOT EXISTS es_complementaria BOOLEAN DEFAULT false;
+ALTER TABLE public.asignaturas ADD COLUMN IF NOT EXISTS es_basica BOOLEAN DEFAULT false;
 ALTER TABLE public.programas ADD COLUMN IF NOT EXISTS numero_semestre int4 DEFAULT 10;
 
 -- 1. Habilitar RLS y otorgar permisos a anon

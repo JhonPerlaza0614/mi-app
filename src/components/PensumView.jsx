@@ -10,13 +10,21 @@ import {
   ArrowRightLeft,
   X,
   HelpCircle,
-  Search
+  Search,
+  Building2,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  Award
 } from 'lucide-react'
 import {
   addCourseToPensum,
   updateCourseSemester,
   removeCourseFromPensum,
-  createAsignatura
+  createAsignatura,
+  getFacultades,
+  updatePrograma
 } from '../services/academicService'
 
 export default function PensumView({
@@ -43,6 +51,13 @@ export default function PensumView({
   const [electiveCode, setElectiveCode] = useState('')
   const [electiveName, setElectiveName] = useState('')
   const [electiveCredits, setElectiveCredits] = useState('')
+
+  // Estado para la barra de electivas disponibles
+  const [facultadesList, setFacultadesList] = useState([])
+  const [programFacultyId, setProgramFacultyId] = useState('')
+  const [electivesSearch, setElectivesSearch] = useState('')
+  const [isElectivesDockExpanded, setIsElectivesDockExpanded] = useState(true)
+  const [electivesTabFilter, setElectivesTabFilter] = useState('all') // 'all' | 'especializadas' | 'comunes'
 
   // Program search combobox
   const [programSearch, setProgramSearch] = useState('')
@@ -136,6 +151,121 @@ export default function PensumView({
       a.name_course.toLowerCase().includes(courseSearchModal.toLowerCase())
     )
   }, [availableCourses, courseSearchModal])
+
+  // Cargar facultades desde la BD
+  useEffect(() => {
+    getFacultades()
+      .then(data => {
+        if (data && data.length > 0) setFacultadesList(data)
+      })
+      .catch(err => console.warn('Error al cargar facultades:', err))
+  }, [])
+
+  // Sincronizar y detectar facultad de la carrera
+  useEffect(() => {
+    if (!currentProgram) {
+      setProgramFacultyId(null)
+      return
+    }
+
+    // 1. Si el programa tiene id_facultad_programa o id_facultad asignado explícitamente en la BD:
+    if (currentProgram.id_facultad_programa || currentProgram.id_facultad) {
+      setProgramFacultyId(String(currentProgram.id_facultad_programa || currentProgram.id_facultad))
+      return
+    }
+
+    // 2. Si no tiene facultad asignada, deducir ÚNICAMENTE si el nombre coincide con carreras conocidas:
+    const pName = (currentProgram.name_program || '').toLowerCase()
+    if (pName.includes('software') || pName.includes('sistemas') || pName.includes('electromec') || pName.includes('ingenier')) {
+      const ingFac = facultadesList.find(f => f.id === 1 || (f.nombre || '').toLowerCase().includes('ingenier'))
+      setProgramFacultyId(ingFac ? String(ingFac.id) : '1')
+      return
+    }
+
+    // Si coincide con alguna otra facultad registrada (ej. Ciencias Humanas, Psicología)
+    const matchingFac = facultadesList.find(f => 
+      f.id !== 2 && f.id !== 3 && pName.includes((f.nombre || '').toLowerCase())
+    )
+    if (matchingFac) {
+      setProgramFacultyId(String(matchingFac.id))
+      return
+    }
+
+    // Para cualquier otra carrera (ej. Psicología) que no sea de ingeniería, NO asociar a Facultad 1
+    // De esta manera no se mezclan las electivas especializadas de otras facultades
+    setProgramFacultyId(null)
+  }, [currentProgram, facultadesList])
+
+  // Mapa de cursos en el pensum de esta carrera
+  const pensumCourseMap = useMemo(() => {
+    const map = new Map()
+    for (const item of currentPensum) {
+      map.set(item.code_course, item)
+    }
+    return map
+  }, [currentPensum])
+
+  // Objeto de la facultad actual de la carrera
+  const currentFacultyObj = useMemo(() => {
+    if (!programFacultyId) return null
+    return facultadesList.find(f => String(f.id) === String(programFacultyId)) || null
+  }, [facultadesList, programFacultyId])
+
+  // Todas las electivas disponibles en el banco de asignaturas
+  const allElectivasDisponibles = useMemo(() => {
+    return asignaturas.filter(a => {
+      return Boolean(
+        a.is_elective || 
+        a.es_complementaria || 
+        a.name_course?.toLowerCase().includes('electiv') ||
+        a.code_course?.toLowerCase().startsWith('ele')
+      )
+    })
+  }, [asignaturas])
+
+  // Electivas Comunes / Complementarias (disponibles para todas las carreras)
+  const electivasComunes = useMemo(() => {
+    return allElectivasDisponibles.filter(a => {
+      const isComun = Boolean(
+        a.es_complementaria || 
+        String(a.id_facultad) === '2' || 
+        a.name_course?.toLowerCase().includes('complementar')
+      )
+      if (!isComun) return false
+
+      if (electivesSearch.trim()) {
+        const q = electivesSearch.toLowerCase()
+        return a.code_course.toLowerCase().includes(q) || a.name_course.toLowerCase().includes(q)
+      }
+      return true
+    })
+  }, [allElectivasDisponibles, electivesSearch])
+
+  // Electivas Especializadas (únicamente de la propia facultad de la carrera)
+  const electivasEspecializadas = useMemo(() => {
+    // Si la carrera no tiene una facultad especializada definida, no puede ver electivas de otras facultades
+    if (!programFacultyId) return []
+
+    return allElectivasDisponibles.filter(a => {
+      const isComun = Boolean(
+        a.es_complementaria || 
+        String(a.id_facultad) === '2' || 
+        a.name_course?.toLowerCase().includes('complementar')
+      )
+      if (isComun) return false
+
+      // Solo electivas que pertenezcan a la misma facultad de la carrera
+      if (String(a.id_facultad) !== String(programFacultyId)) {
+        return false
+      }
+
+      if (electivesSearch.trim()) {
+        const q = electivesSearch.toLowerCase()
+        return a.code_course.toLowerCase().includes(q) || a.name_course.toLowerCase().includes(q)
+      }
+      return true
+    })
+  }, [allElectivasDisponibles, programFacultyId, electivesSearch])
 
   // Generador de nombre consecutivo para electivas (Electiva Profesional I, II, III...)
   const getConsecutiveElectiveName = useCallback(() => {
@@ -564,6 +694,207 @@ export default function PensumView({
         </div>
       </div>
 
+      {/* =====================================================================
+          BARRA / PANEL DE ELECTIVAS DISPONIBLES DEBAJO DEL PENSUM
+          ===================================================================== */}
+      <div className="electives-dock-section print-hide">
+        <div className="electives-dock-header">
+          <div className="electives-dock-title-group">
+            <div className="dock-icon-wrapper">
+              <Sparkles size={20} className="text-purple" />
+            </div>
+            <div>
+              <div className="electives-dock-heading-row">
+                <h3 className="electives-dock-title">
+                  Banco de Electivas Disponibles para la Carrera
+                </h3>
+                <span className="dock-badge-total">
+                  {electivasEspecializadas.length + electivasComunes.length} disponibles
+                </span>
+              </div>
+              <p className="electives-dock-desc">
+                {currentFacultyObj 
+                  ? <>Electivas especializadas de la facultad <strong>{currentFacultyObj.nombre || currentFacultyObj.Nombre}</strong> y electivas comunes / complementarias institucionales.</>
+                  : <>Electivas especializadas de la propia carrera y electivas comunes / complementarias institucionales.</>
+                }
+              </p>
+            </div>
+          </div>
+
+          <div className="electives-dock-controls">
+            {/* Indicador de Facultad de la Carrera (Fijo e informativo, sin opción de cambiarla) */}
+            {currentFacultyObj && (
+              <div className="dock-faculty-tag" title="Facultad a la que pertenece esta carrera">
+                <Building2 size={14} />
+                <span>Facultad: <strong>{currentFacultyObj.nombre || currentFacultyObj.Nombre}</strong></span>
+              </div>
+            )}
+
+            {/* Buscador de Electivas */}
+            <div className="dock-search-box">
+              <Search size={14} className="dock-search-icon" />
+              <input
+                type="text"
+                placeholder="Buscar electiva..."
+                value={electivesSearch}
+                onChange={(e) => setElectivesSearch(e.target.value)}
+              />
+              {electivesSearch && (
+                <button className="dock-search-clear" onClick={() => setElectivesSearch('')}>×</button>
+              )}
+            </div>
+
+            {/* Pestañas de Filtro */}
+            <div className="dock-tabs-group">
+              <button
+                type="button"
+                className={`dock-tab-btn ${electivesTabFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setElectivesTabFilter('all')}
+              >
+                Todas ({electivasEspecializadas.length + electivasComunes.length})
+              </button>
+              <button
+                type="button"
+                className={`dock-tab-btn ${electivesTabFilter === 'especializadas' ? 'active' : ''}`}
+                onClick={() => setElectivesTabFilter('especializadas')}
+              >
+                Especializadas ({electivasEspecializadas.length})
+              </button>
+              <button
+                type="button"
+                className={`dock-tab-btn ${electivesTabFilter === 'comunes' ? 'active' : ''}`}
+                onClick={() => setElectivesTabFilter('comunes')}
+              >
+                Comunes ({electivasComunes.length})
+              </button>
+            </div>
+
+            {/* Botón Minimizar / Expandir */}
+            <button
+              type="button"
+              className="btn-dock-toggle"
+              onClick={() => setIsElectivesDockExpanded(!isElectivesDockExpanded)}
+              title={isElectivesDockExpanded ? "Minimizar barra" : "Expandir barra"}
+            >
+              {isElectivesDockExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Contenido Expandible */}
+        {isElectivesDockExpanded && (
+          <div className="electives-dock-body">
+            <div className="electives-split-grid">
+              {/* COLUMNA 1: ELECTIVAS ESPECIALIZADAS */}
+              {(electivesTabFilter === 'all' || electivesTabFilter === 'especializadas') && (
+                <div className="electives-dock-column column-especializadas">
+                  <div className="dock-column-header">
+                    <div className="dock-column-header-title">
+                      <span className="dock-pill-tag tag-especializada">
+                        <Layers size={13} /> Especializadas
+                      </span>
+                      <h4>{currentFacultyObj ? `Facultad de ${currentFacultyObj.nombre || currentFacultyObj.Nombre}` : 'Especializadas de la Carrera'}</h4>
+                    </div>
+                    <span className="dock-count-badge">{electivasEspecializadas.length} materias</span>
+                  </div>
+
+                  <div className="dock-cards-scroll">
+                    {electivasEspecializadas.length === 0 ? (
+                      <div className="dock-empty-state">
+                        <p>No hay electivas especializadas registradas para la facultad de esta carrera.</p>
+                        <button className="btn-link" onClick={onNavigateToAsignaturas}>
+                          + Crear electiva especializada en Asignaturas
+                        </button>
+                      </div>
+                    ) : (
+                      electivasEspecializadas.map(el => {
+                        const inPensum = pensumCourseMap.get(el.code_course)
+                        return (
+                          <div key={el.code_course} className="dock-elective-card card-especializada">
+                            <div className="dock-card-top">
+                              <span className="dock-course-code">{el.code_course}</span>
+                              <span className="dock-credits-badge">
+                                <Award size={11} /> {el.credits ?? 0} {el.credits === 1 ? 'créd' : 'créds'}
+                              </span>
+                            </div>
+                            <h5 className="dock-course-name">{el.name_course}</h5>
+                            
+                            <div className="dock-card-actions">
+                              {inPensum ? (
+                                <span className="dock-assigned-badge">
+                                  <CheckCircle2 size={13} /> En Semestre {inPensum.semestre}
+                                </span>
+                              ) : (
+                                <span className="dock-available-badge">
+                                  Disponible
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* COLUMNA 2: ELECTIVAS COMUNES / COMPLEMENTARIAS */}
+              {(electivesTabFilter === 'all' || electivesTabFilter === 'comunes') && (
+                <div className="electives-dock-column column-comunes">
+                  <div className="dock-column-header">
+                    <div className="dock-column-header-title">
+                      <span className="dock-pill-tag tag-comun">
+                        <Sparkles size={13} /> Comunes / Complementarias
+                      </span>
+                      <h4>Transversales Institucionales </h4>
+                    </div>
+                    <span className="dock-count-badge">{electivasComunes.length} materias</span>
+                  </div>
+
+                  <div className="dock-cards-scroll">
+                    {electivasComunes.length === 0 ? (
+                      <div className="dock-empty-state">
+                        <p>No hay electivas comunes o complementarias registradas.</p>
+                        <button className="btn-link" onClick={onNavigateToAsignaturas}>
+                          + Crear electiva complementaria en Asignaturas
+                        </button>
+                      </div>
+                    ) : (
+                      electivasComunes.map(el => {
+                        const inPensum = pensumCourseMap.get(el.code_course)
+                        return (
+                          <div key={el.code_course} className="dock-elective-card card-comun">
+                            <div className="dock-card-top">
+                              <span className="dock-course-code">{el.code_course}</span>
+                              <span className="dock-credits-badge">
+                                <Award size={11} /> {el.credits ?? 0} {el.credits === 1 ? 'créd' : 'créds'}
+                              </span>
+                            </div>
+                            <h5 className="dock-course-name">{el.name_course}</h5>
+                            
+                            <div className="dock-card-actions">
+                              {inPensum ? (
+                                <span className="dock-assigned-badge">
+                                  <CheckCircle2 size={13} /> En Semestre {inPensum.semestre}
+                                </span>
+                              ) : (
+                                <span className="dock-available-badge">
+                                  Disponible
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Modal: Asignar Asignatura al Pensum */}
       {isAddModalOpen && (
         <div className="modal-backdrop">
@@ -653,10 +984,10 @@ export default function PensumView({
                               onChange={() => setSelectedCourseForAdd(c.code_course)}
                             />
                             <div className="picker-item-details">
-                              <div className="picker-item-info">
-                                <span className="picker-code">{c.code_course}</span>
-                                <span className="picker-name">{c.name_course}</span>
-                              </div>
+                                <div className="picker-item-info">
+                                  <span className="picker-code">{c.code_course}</span>
+                                  <span className="picker-name">{c.name_course}</span>
+                                </div>
                               <span className="picker-credits-tag">
                                 {c.credits && c.credits > 0 ? `${c.credits} ${c.credits === 1 ? 'crédito' : 'créditos'}` : '? créditos'}
                               </span>

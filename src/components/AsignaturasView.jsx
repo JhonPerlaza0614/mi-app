@@ -44,6 +44,8 @@ export default function AsignaturasView({
     name_course: '',
     credits: 3,
     is_elective: false,
+    es_complementaria: false,
+    es_basica: false,
     id_facultad: ''
   })
 
@@ -80,7 +82,9 @@ export default function AsignaturasView({
       name_course: '',
       credits: isElectivePreset ? '' : 3,
       is_elective: isElectivePreset,
-      id_facultad: facultadesList[0]?.id ? String(facultadesList[0].id) : ''
+      es_complementaria: false,
+      es_basica: false,
+      id_facultad: ''
     })
     setIsModalOpen(true)
   }
@@ -98,16 +102,53 @@ export default function AsignaturasView({
       name_course: asig.name_course,
       credits: asig.credits !== undefined && asig.credits !== null && asig.credits > 0 ? asig.credits : '',
       is_elective: Boolean(asig.is_elective || asig.name_course?.toLowerCase().includes('electiv')),
+      es_complementaria: Boolean(asig.es_complementaria),
+      es_basica: Boolean(asig.es_basica),
       id_facultad: asig.id_facultad ? String(asig.id_facultad) : ''
     })
     setIsModalOpen(true)
   }
 
   const handleToggleElective = (checked) => {
+    setFormData(prev => {
+      const newEsComplementaria = checked ? prev.es_complementaria : false
+      const newEsBasica = checked ? false : prev.es_basica
+      let newIdFacultad = prev.id_facultad
+      if (checked && newEsComplementaria) {
+        newIdFacultad = '2'
+      } else if (!checked && newEsBasica) {
+        newIdFacultad = '3'
+      } else if (!checked && prev.id_facultad === '2') {
+        newIdFacultad = ''
+      }
+      return {
+        ...prev,
+        is_elective: checked,
+        credits: checked && prev.credits === 3 ? '' : prev.credits,
+        es_complementaria: newEsComplementaria,
+        es_basica: newEsBasica,
+        id_facultad: newIdFacultad
+      }
+    })
+  }
+
+  const handleToggleComplementaria = (checked) => {
+    if (checked) setIsAddingNewFacultad(false)
     setFormData(prev => ({
       ...prev,
-      is_elective: checked,
-      credits: checked && prev.credits === 3 ? '' : prev.credits
+      es_complementaria: checked,
+      es_basica: false,
+      id_facultad: checked ? '2' : (prev.id_facultad === '2' ? '' : prev.id_facultad)
+    }))
+  }
+
+  const handleToggleBasica = (checked) => {
+    if (checked) setIsAddingNewFacultad(false)
+    setFormData(prev => ({
+      ...prev,
+      es_basica: checked,
+      es_complementaria: false,
+      id_facultad: checked ? '3' : (prev.id_facultad === '3' ? '' : prev.id_facultad)
     }))
   }
 
@@ -150,9 +191,9 @@ export default function AsignaturasView({
     }
 
     let codeClean = formData.code_course.trim().toUpperCase()
-    if (!codeClean && formData.is_elective) {
-      const slug = nameClean.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()
-      codeClean = `ELE-${slug || Date.now().toString().slice(-4)}`
+    if (!editingAsignatura && !codeClean) {
+      onShowToast('El código de la asignatura es obligatorio', 'error')
+      return
     }
 
     const creditsParsed = parseInt(formData.credits, 10)
@@ -165,6 +206,8 @@ export default function AsignaturasView({
           name_course: nameClean,
           credits: creditsNum,
           is_elective: formData.is_elective,
+          es_complementaria: formData.es_complementaria,
+          es_basica: formData.es_basica,
           id_facultad: formData.id_facultad
         })
         onShowToast('Asignatura actualizada exitosamente', 'success')
@@ -179,6 +222,8 @@ export default function AsignaturasView({
           name_course: nameClean,
           credits: creditsNum,
           is_elective: formData.is_elective,
+          es_complementaria: formData.es_complementaria,
+          es_basica: formData.es_basica,
           id_facultad: formData.id_facultad
         })
         onShowToast(formData.is_elective ? 'Electiva registrada exitosamente' : 'Asignatura registrada exitosamente', 'success')
@@ -280,6 +325,16 @@ export default function AsignaturasView({
                         <Sparkles size={11} /> Electiva
                       </span>
                     )}
+                    {asig.es_complementaria && (
+                      <span className="pensum-elective-pill" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' }} title="Asignatura Complementaria (Facultad ID 2)">
+                        Complementaria
+                      </span>
+                    )}
+                    {asig.es_basica && (
+                      <span className="pensum-elective-pill" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }} title="Asignatura Básica (Facultad ID 3)">
+                        Básica
+                      </span>
+                    )}
                     {facDisplayName && (
                       <span className="badge-group" title="Facultad de la BD" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
                         <Building2 size={11} /> {facDisplayName}
@@ -371,105 +426,177 @@ export default function AsignaturasView({
                     </label>
                   </div>
 
-                  <div className="form-group" style={{ marginTop: '0.75rem' }}>
-                    <div className="group-label-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label htmlFor="modal_facultad" className="setting-select-label">
-                        Facultad de la BD <small className="text-muted">(Tabla 'Facultad')</small>
-                      </label>
-                      <button
-                        type="button"
-                        className="btn-link"
-                        onClick={() => setIsAddingNewFacultad(!isAddingNewFacultad)}
-                        style={{ fontSize: '0.8rem' }}
-                      >
-                        {isAddingNewFacultad ? 'Cancelar' : '+ Agregar Nueva Facultad a BD'}
-                      </button>
-                    </div>
-
-                    {isAddingNewFacultad ? (
-                      <div className="new-group-inline-form" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.4rem' }}>
-                        <input
-                          type="text"
-                          placeholder="Nombre de la facultad (ej. Facultad de Ingeniería)"
-                          value={newFacultadName}
-                          onChange={(e) => setNewFacultadName(e.target.value)}
-                          className="select-input"
-                          autoFocus
-                        />
-                        <input
-                          type="text"
-                          placeholder="Descripción de la facultad (opcional)"
-                          value={newFacultadDesc}
-                          onChange={(e) => setNewFacultadDesc(e.target.value)}
-                          className="select-input"
-                        />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.2rem' }}>
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => setIsAddingNewFacultad(false)}
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-primary btn-sm"
-                            onClick={handleCreateNewFacultadInDb}
-                            disabled={addingFacultadSubmitting || !newFacultadName.trim()}
-                          >
-                            {addingFacultadSubmitting ? 'Guardando...' : 'Guardar en BD'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <select
-                        id="modal_id_facultad"
-                        value={formData.id_facultad}
-                        onChange={(e) => setFormData({ ...formData, id_facultad: e.target.value })}
-                        className="select-input"
-                        style={{ marginTop: '0.35rem' }}
-                      >
-                        <option value="">-- Seleccionar Facultad de la BD --</option>
-                        {facultadesList.length === 0 ? (
-                          <option value="" disabled>No hay facultades en la base de datos (+ Crear Nueva Facultad)</option>
+                  <div className="setting-row" style={{ marginTop: '0.5rem', opacity: formData.is_elective ? 1 : 0.5 }}>
+                    <label 
+                      className="checkbox-setting-label"
+                      style={{ cursor: formData.is_elective ? 'pointer' : 'not-allowed' }}
+                      title={!formData.is_elective ? 'Solo se puede activar si "Es Electiva" está marcada' : ''}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.es_complementaria}
+                        disabled={!formData.is_elective}
+                        onChange={(e) => handleToggleComplementaria(e.target.checked)}
+                        className="checkbox-input-custom"
+                      />
+                      <span className="checkbox-label-text">
+                        <BookOpen size={16} className={formData.es_complementaria ? 'text-primary' : 'text-muted'} />
+                        <strong>Electiva Complementaria:</strong>{' '}
+                        {!formData.is_elective ? (
+                          <span className="badge-false" style={{ opacity: 0.8 }}>(Requiere ser Electiva)</span>
+                        ) : formData.es_complementaria ? (
+                          <span className="badge-true" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' }}>Sí (Facultad ID 2)</span>
                         ) : (
-                          facultadesList.map((f, idx) => {
-                            const val = f.id ? String(f.id) : ''
-                            const nameText = f.nombre || f.Nombre || f.name || `Facultad ${f.id || idx + 1}`
-                            const descText = f.descripcion || f.Descripcion || f.descripción || ''
-                            const label = descText ? `${nameText} — ${descText}` : nameText
-                            return (
-                              <option key={f.id || idx} value={val}>
-                                {label} (ID: {f.id})
-                              </option>
-                            )
-                          })
+                          <span className="badge-false">No</span>
                         )}
-                      </select>
-                    )}
+                      </span>
+                    </label>
                   </div>
+
+                  <div className="setting-row" style={{ marginTop: '0.5rem', opacity: (!formData.is_elective && !formData.es_complementaria) ? 1 : 0.5 }}>
+                    <label 
+                      className="checkbox-setting-label"
+                      style={{ cursor: (!formData.is_elective && !formData.es_complementaria) ? 'pointer' : 'not-allowed' }}
+                      title={(formData.is_elective || formData.es_complementaria) ? 'Solo se puede activar si NO es electiva ni complementaria' : ''}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.es_basica}
+                        disabled={formData.is_elective || formData.es_complementaria}
+                        onChange={(e) => handleToggleBasica(e.target.checked)}
+                        className="checkbox-input-custom"
+                      />
+                      <span className="checkbox-label-text">
+                        <Library size={16} className={formData.es_basica ? 'text-success' : 'text-muted'} />
+                        <strong>Asignatura Básica:</strong>{' '}
+                        {(formData.is_elective || formData.es_complementaria) ? (
+                          <span className="badge-false" style={{ opacity: 0.8 }}>(No puede ser electiva)</span>
+                        ) : formData.es_basica ? (
+                          <span className="badge-true" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)' }}>Sí (Facultad ID 3)</span>
+                        ) : (
+                          <span className="badge-false">No</span>
+                        )}
+                      </span>
+                    </label>
+                  </div>
+
+                  {(() => {
+                    const isFacultyLocked = Boolean(formData.es_complementaria || formData.es_basica)
+                    return (
+                      <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                        <div className="group-label-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label htmlFor="modal_facultad" className="setting-select-label">
+                            Facultad
+                          </label>
+                          {!isFacultyLocked && (
+                            <button
+                              type="button"
+                              className="btn-link"
+                              onClick={() => setIsAddingNewFacultad(!isAddingNewFacultad)}
+                              style={{ fontSize: '0.8rem' }}
+                            >
+                              {isAddingNewFacultad ? 'Cancelar' : '+ Agregar Nueva Facultad a BD'}
+                            </button>
+                          )}
+                        </div>
+
+                        {isAddingNewFacultad && !isFacultyLocked ? (
+                          <div className="new-group-inline-form" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.4rem' }}>
+                            <input
+                              type="text"
+                              placeholder="Nombre de la facultad (ej. Facultad de Ingeniería)"
+                              value={newFacultadName}
+                              onChange={(e) => setNewFacultadName(e.target.value)}
+                              className="select-input"
+                              autoFocus
+                            />
+                            <input
+                              type="text"
+                              placeholder="Descripción de la facultad (opcional)"
+                              value={newFacultadDesc}
+                              onChange={(e) => setNewFacultadDesc(e.target.value)}
+                              className="select-input"
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.2rem' }}>
+                              <button
+                                type="button"
+                                className="btn-secondary btn-sm"
+                                onClick={() => setIsAddingNewFacultad(false)}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm"
+                                onClick={handleCreateNewFacultadInDb}
+                                disabled={addingFacultadSubmitting || !newFacultadName.trim()}
+                              >
+                                {addingFacultadSubmitting ? 'Guardando...' : 'Guardar en BD'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <select
+                              id="modal_id_facultad"
+                              value={formData.id_facultad}
+                              onChange={(e) => setFormData({ ...formData, id_facultad: e.target.value })}
+                              disabled={isFacultyLocked}
+                              className="select-input"
+                              style={{
+                                marginTop: '0.35rem',
+                                opacity: isFacultyLocked ? 0.65 : 1,
+                                cursor: isFacultyLocked ? 'not-allowed' : 'default',
+                                backgroundColor: isFacultyLocked ? 'rgba(255, 255, 255, 0.05)' : undefined
+                              }}
+                            >
+                              <option value="">-- Seleccionar Facultad --</option>
+                              {facultadesList.length === 0 ? (
+                                <option value="" disabled>No hay facultades en la base de datos (+ Crear Nueva Facultad)</option>
+                              ) : (
+                                facultadesList.map((f, idx) => {
+                                  const val = f.id ? String(f.id) : ''
+                                  const nameText = f.nombre || f.Nombre || f.name || `Facultad ${f.id || idx + 1}`
+                                  const descText = f.descripcion || f.Descripcion || f.descripción || ''
+                                  const label = descText ? `${nameText} — ${descText}` : nameText
+                                  return (
+                                    <option key={f.id || idx} value={val}>
+                                      {label}
+                                    </option>
+                                  )
+                                })
+                              )}
+                            </select>
+                            {isFacultyLocked && (
+                              <small className="form-hint" style={{ marginTop: '0.35rem', display: 'block', color: '#60a5fa' }}>
+                                🔒 Campo de facultad bloqueado: Asignada automáticamente a Facultad ID {formData.id_facultad} ({formData.es_complementaria ? 'Complementaria' : 'Básica'}).
+                              </small>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div className="form-group">
                   <label htmlFor="code_course">
-                    Código de la Asignatura {formData.is_elective ? '(Opcional)' : '*'}
+                    Código de la Asignatura <span className="text-danger">*</span>
                   </label>
                   <input
                     id="code_course"
                     type="text"
-                    placeholder={formData.is_elective ? "Vacío (se generará código único si lo dejas en blanco)" : "Ej. MAT101, PROG-201, BD102"}
+                    placeholder="Ej. MAT101, PROG-201, ELE101"
                     value={formData.code_course}
                     onChange={(e) => setFormData({ ...formData, code_course: e.target.value })}
                     disabled={!!editingAsignatura}
-                    required={!formData.is_elective && !editingAsignatura}
+                    required={!editingAsignatura}
                   />
                   {editingAsignatura ? (
                     <small className="form-hint">El código de la materia es clave primaria y no puede modificarse.</small>
                   ) : (
                     <small className="form-hint">
-                      {formData.is_elective
-                        ? 'Si lo dejas vacío, se autogenerará un código único para esta electiva.'
-                        : 'El trigger de Supabase convertirá las letras a mayúsculas.'}
+                      El código de la asignatura es obligatorio y debe ser único. El sistema convertirá las letras a mayúsculas.
                     </small>
                   )}
                 </div>
