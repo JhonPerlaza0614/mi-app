@@ -17,28 +17,43 @@ export async function getProgramas() {
 }
 
 export async function createPrograma(programa) {
+  const insertPayload = {
+    code_program: programa.code_program.trim().toUpperCase(),
+    name_program: programa.name_program.trim(),
+    numero_semestre: parseInt(programa.numero_semestre, 10) || 10,
+  }
+  if (programa.id_facultad_programa) {
+    insertPayload.id_facultad_programa = parseInt(programa.id_facultad_programa, 10)
+  }
+
   const { data, error } = await supabase
     .from('programas')
-    .insert([
-      {
-        code_program: programa.code_program.trim().toUpperCase(),
-        name_program: programa.name_program.trim(),
-        
-        numero_semestre: parseInt(programa.numero_semestre, 10) || 10,
-      }
-    ])
+    .insert([insertPayload])
     .select()
 
-  if (error) throw error
+  if (error) {
+    if (insertPayload.id_facultad_programa) {
+      delete insertPayload.id_facultad_programa
+      const { data: fbData, error: fbError } = await supabase
+        .from('programas')
+        .insert([insertPayload])
+        .select()
+      if (fbError) throw error
+      return fbData?.[0]
+    }
+    throw error
+  }
   return data?.[0]
 }
 
 export async function updatePrograma(code_program, changes) {
   const updateData = {}
   if (changes.name_program !== undefined) updateData.name_program = changes.name_program.trim()
-  
   if (changes.numero_semestre !== undefined) {
     updateData.numero_semestre = parseInt(changes.numero_semestre, 10) || 10
+  }
+  if (changes.id_facultad_programa !== undefined) {
+    updateData.id_facultad_programa = changes.id_facultad_programa ? parseInt(changes.id_facultad_programa, 10) : null
   }
 
   const { data, error } = await supabase
@@ -47,7 +62,18 @@ export async function updatePrograma(code_program, changes) {
     .eq('code_program', code_program)
     .select()
 
-  if (error) throw error
+  if (error) {
+    console.warn('Error al actualizar programa, probando sin id_facultad_programa:', error)
+    const fallbackUpdate = { ...updateData }
+    delete fallbackUpdate.id_facultad_programa
+    const { data: fbData, error: fbError } = await supabase
+      .from('programas')
+      .update(fallbackUpdate)
+      .eq('code_program', code_program)
+      .select()
+    if (fbError) throw error
+    return fbData?.[0]
+  }
   return data?.[0]
 }
 
@@ -76,18 +102,53 @@ export async function getAsignaturas() {
 
 export async function createAsignatura(asignatura) {
   const creditsVal = parseInt(asignatura.credits, 10)
+  const payload = {
+    code_course: asignatura.code_course.trim().toUpperCase(),
+    name_course: asignatura.name_course.trim(),
+    credits: isNaN(creditsVal) ? 0 : Math.max(0, creditsVal),
+  }
+  if (asignatura.is_elective !== undefined) payload.is_elective = Boolean(asignatura.is_elective)
+  if (asignatura.es_complementaria !== undefined) payload.es_complementaria = Boolean(asignatura.es_complementaria)
+  if (asignatura.es_basica !== undefined) payload.es_basica = Boolean(asignatura.es_basica)
+  if (asignatura.id_facultad !== undefined && asignatura.id_facultad !== null && asignatura.id_facultad !== '') {
+    const facId = parseInt(asignatura.id_facultad, 10)
+    if (!isNaN(facId)) payload.id_facultad = facId
+  }
+
   const { data, error } = await supabase
     .from('asignaturas')
-    .insert([
-      {
-        code_course: asignatura.code_course.trim().toUpperCase(),
-        name_course: asignatura.name_course.trim(),
-        credits: isNaN(creditsVal) ? 0 : Math.max(0, creditsVal),
-      }
-    ])
+    .insert([payload])
     .select()
 
-  if (error) throw error
+  if (error) {
+    console.warn('Error en inserción completa de asignaturas:', error)
+    // Fallback 1: Probar sin es_complementaria, es_basica ni id_facultad si las columnas no existen aún
+    const payloadNoNewCols = { ...payload }
+    delete payloadNoNewCols.es_complementaria
+    delete payloadNoNewCols.es_basica
+    delete payloadNoNewCols.id_facultad
+    const { data: fbData1, error: fbError1 } = await supabase
+      .from('asignaturas')
+      .insert([payloadNoNewCols])
+      .select()
+
+    if (!fbError1 && fbData1) return fbData1[0]
+
+    // Fallback 2: Probar solo campos esenciales (code_course, name_course, credits)
+    const payloadCore = {
+      code_course: asignatura.code_course.trim().toUpperCase(),
+      name_course: asignatura.name_course.trim(),
+      credits: isNaN(creditsVal) ? 0 : Math.max(0, creditsVal),
+    }
+    const { data: fbData2, error: fbError2 } = await supabase
+      .from('asignaturas')
+      .insert([payloadCore])
+      .select()
+
+    if (!fbError2 && fbData2) return fbData2[0]
+
+    throw error
+  }
   return data?.[0]
 }
 
@@ -98,6 +159,13 @@ export async function updateAsignatura(code_course, changes) {
     const creditsVal = parseInt(changes.credits, 10)
     updateData.credits = isNaN(creditsVal) ? 0 : Math.max(0, creditsVal)
   }
+  if (changes.is_elective !== undefined) updateData.is_elective = Boolean(changes.is_elective)
+  if (changes.es_complementaria !== undefined) updateData.es_complementaria = Boolean(changes.es_complementaria)
+  if (changes.es_basica !== undefined) updateData.es_basica = Boolean(changes.es_basica)
+  if (changes.id_facultad !== undefined) {
+    const facId = parseInt(changes.id_facultad, 10)
+    updateData.id_facultad = !isNaN(facId) ? facId : null
+  }
 
   const { data, error } = await supabase
     .from('asignaturas')
@@ -105,7 +173,21 @@ export async function updateAsignatura(code_course, changes) {
     .eq('code_course', code_course)
     .select()
 
-  if (error) throw error
+  if (error) {
+    console.warn('Error al actualizar asignatura, aplicando fallback:', error)
+    const cleanUpdate = {}
+    if (changes.name_course !== undefined) cleanUpdate.name_course = changes.name_course.trim()
+    if (changes.credits !== undefined) cleanUpdate.credits = updateData.credits
+    if (changes.is_elective !== undefined) cleanUpdate.is_elective = updateData.is_elective
+    const { data: fbData, error: fbError } = await supabase
+      .from('asignaturas')
+      .update(cleanUpdate)
+      .eq('code_course', code_course)
+      .select()
+
+    if (fbError) throw error
+    return fbData?.[0]
+  }
   return data?.[0]
 }
 
@@ -136,7 +218,7 @@ export async function getPensumByProgram(code_program) {
     return []
   }
 
-  // Obtenemos las asignaturas para combinar nombre y detalles
+  // Obtenemos las asignaturas para combinar Nombre y detalles
   const courseCodes = pensumData.map(p => p.code_course)
   const { data: coursesData, error: coursesError } = await supabase
     .from('asignaturas')
@@ -218,6 +300,62 @@ export async function removeCourseFromPensum({ code_program, code_course }) {
   return true
 }
 
+// --- FACULTADES ---
+
+export async function getFacultades() {
+  try {
+    // Probar tabla 'Facultad'
+    const { data, error } = await supabase
+      .from('Facultad')
+      .select('*')
+
+    if (!error && data) {
+      return data
+    }
+
+    // Si dio PGRST205 / 404 (tabla no encontrada por distinción de mayúsculas), probar 'facultad'
+    if (error && (error.code === 'PGRST205' || error.status === 404)) {
+      const { data: dataLower, error: errorLower } = await supabase
+        .from('facultad')
+        .select('*')
+
+      if (!errorLower && dataLower) {
+        return dataLower
+      }
+    }
+  } catch {
+    // Captura silenciosa para evitar logs de red no deseados
+  }
+
+  return []
+}
+
+export async function createFacultad({ nombre, descripcion }) {
+  const name = nombre ? nombre.trim() : ''
+  const desc = descripcion ? descripcion.trim() : ''
+
+  const payload = { nombre: name }
+  if (desc) payload.descripcion = desc
+
+  // Intento 1: Tabla 'Facultad'
+  const { data: data1, error: err1 } = await supabase
+    .from('Facultad')
+    .insert([payload])
+    .select()
+
+  if (!err1 && data1) return data1[0]
+
+  // Intento 2: Tabla 'facultad' en minúscula
+  const { data: data2, error: err2 } = await supabase
+    .from('facultad')
+    .insert([payload])
+    .select()
+
+  if (!err2 && data2) return data2[0]
+
+  throw err1 || err2
+}
+
 // --- DIAGNÓSTICO DE BASE DE DATOS ---
 
 export async function checkDatabaseHealth() {
@@ -227,22 +365,25 @@ export async function checkDatabaseHealth() {
       programas: false,
       asignaturas: false,
       pensum_academico: false,
+      Facultad: false,
     },
     rlsPermitted: false,
     error: null,
   }
 
   try {
-    const [progRes, asigRes, pensumRes] = await Promise.allSettled([
+    const [progRes, asigRes, pensumRes, facultadRes] = await Promise.allSettled([
       supabase.from('programas').select('*').limit(1),
       supabase.from('asignaturas').select('*').limit(1),
       supabase.from('pensum_academico').select('*').limit(1),
+      supabase.from('Facultad').select('*').limit(1),
     ])
 
     results.connected = true
     results.tables.programas = progRes.status === 'fulfilled' && !progRes.value.error
     results.tables.asignaturas = asigRes.status === 'fulfilled' && !asigRes.value.error
     results.tables.pensum_academico = pensumRes.status === 'fulfilled' && !pensumRes.value.error
+    results.tables.Facultad = facultadRes.status === 'fulfilled' && !facultadRes.value.error
 
     if (progRes.status === 'fulfilled' && progRes.value.error) {
       results.error = progRes.value.error.message

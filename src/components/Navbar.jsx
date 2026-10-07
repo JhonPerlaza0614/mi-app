@@ -1,7 +1,7 @@
 import React from 'react'
-import { GraduationCap, BookOpen, Library, Database, Layers } from 'lucide-react'
+import { GraduationCap, BookOpen, Library, Layers } from 'lucide-react'
 
-export default function Navbar({ activeTab, setActiveTab, onOpenSqlModal, isConnected }) {
+export default function Navbar({ activeTab, setActiveTab, isConnected }) {
   return (
     <header className="navbar">
       <div className="navbar-container">

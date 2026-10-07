@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { Plus, Search, Edit2, Trash2, BookOpen, Layers, AlertTriangle, Award } from 'lucide-react'
-import { createPrograma, updatePrograma, deletePrograma } from '../services/academicService'
+import React, { useState, useEffect } from 'react'
+import { Plus, Search, Edit2, Trash2, BookOpen, Layers, AlertTriangle, Award, Building2 } from 'lucide-react'
+import { createPrograma, updatePrograma, deletePrograma, getFacultades, createFacultad } from '../services/academicService'
 
 export default function ProgramasView({ 
   programas, 
@@ -14,13 +14,29 @@ export default function ProgramasView({
   const [editingProgram, setEditingProgram] = useState(null)
   const [deletingProgram, setDeletingProgram] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [facultadesList, setFacultadesList] = useState([])
+
+  // Estado para creación rápida de facultad
+  const [isAddingNewFacultad, setIsAddingNewFacultad] = useState(false)
+  const [newFacultadName, setNewFacultadName] = useState('')
+  const [newFacultadDesc, setNewFacultadDesc] = useState('')
+  const [addingFacultadSubmitting, setAddingFacultadSubmitting] = useState(false)
+
+  // Cargar facultades
+  useEffect(() => {
+    getFacultades()
+      .then(data => {
+        if (data && data.length > 0) setFacultadesList(data)
+      })
+      .catch(err => console.warn('Error al cargar facultades:', err))
+  }, [])
 
   // Form state
   const [formData, setFormData] = useState({
     code_program: '',
     name_program: '',
-    
     numero_semestre: 10,
+    id_facultad_programa: '',
   })
 
   // Filtered programs
@@ -41,24 +57,59 @@ export default function ProgramasView({
       .reduce((sum, item) => sum + (item.credits || 0), 0)
   }
 
+  const handleCreateNewFacultadInDb = async () => {
+    if (!newFacultadName.trim()) {
+      onShowToast('Ingresa el nombre de la nueva facultad', 'error')
+      return
+    }
+
+    setAddingFacultadSubmitting(true)
+    try {
+      const created = await createFacultad({ 
+        nombre: newFacultadName.trim(),
+        descripcion: newFacultadDesc.trim()
+      })
+      onShowToast(`Facultad "${newFacultadName}" creada exitosamente`, 'success')
+      setNewFacultadName('')
+      setNewFacultadDesc('')
+      setIsAddingNewFacultad(false)
+      
+      const updatedFacultades = await getFacultades()
+      setFacultadesList(updatedFacultades)
+      if (created && created.id) {
+        setFormData(prev => ({ ...prev, id_facultad_programa: String(created.id) }))
+      }
+    } catch (err) {
+      onShowToast(`Error al guardar facultad: ${err.message}`, 'error')
+    } finally {
+      setAddingFacultadSubmitting(false)
+    }
+  }
+
   const handleOpenCreateModal = () => {
     setEditingProgram(null)
+    setIsAddingNewFacultad(false)
+    setNewFacultadName('')
+    setNewFacultadDesc('')
     setFormData({
       code_program: '',
       name_program: '',
-      
       numero_semestre: 10,
+      id_facultad_programa: '',
     })
     setIsModalOpen(true)
   }
 
   const handleOpenEditModal = (prog) => {
     setEditingProgram(prog)
+    setIsAddingNewFacultad(false)
+    setNewFacultadName('')
+    setNewFacultadDesc('')
     setFormData({
       code_program: prog.code_program,
       name_program: prog.name_program,
-      
       numero_semestre: prog.numero_semestre !== undefined && prog.numero_semestre !== null ? prog.numero_semestre : 10,
+      id_facultad_programa: prog.id_facultad_programa ? String(prog.id_facultad_programa) : '',
     })
     setIsModalOpen(true)
   }
@@ -81,8 +132,8 @@ export default function ProgramasView({
       if (editingProgram) {
         await updatePrograma(editingProgram.code_program, {
           name_program: formData.name_program,
-          
           numero_semestre: numSemestres,
+          id_facultad_programa: formData.id_facultad_programa ? parseInt(formData.id_facultad_programa, 10) : null,
         })
         onShowToast('Programa actualizado correctamente', 'success')
       } else {
@@ -94,6 +145,7 @@ export default function ProgramasView({
         await createPrograma({
           ...formData,
           numero_semestre: numSemestres,
+          id_facultad_programa: formData.id_facultad_programa ? parseInt(formData.id_facultad_programa, 10) : null,
         })
         onShowToast('Programa creado exitosamente', 'success')
       }
@@ -178,7 +230,11 @@ export default function ProgramasView({
               <div key={prog.code_program} className="item-card">
                 <div className="item-card-header">
                   <div className="badge-code">{prog.code_program}</div>
-                  
+                  {prog.id_facultad_programa && (
+                    <span className="badge-group" title="Facultad">
+                      <Building2 size={12} /> {facultadesList.find(f => f.id === prog.id_facultad_programa)?.nombre || 'Facultad'}
+                    </span>
+                  )}
                 </div>
 
                 <h3 className="item-card-title">{prog.name_program}</h3>
@@ -271,6 +327,77 @@ export default function ProgramasView({
                 </div>
 
               
+
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label htmlFor="id_facultad_programa">Facultad Perteneciente</label>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => setIsAddingNewFacultad(!isAddingNewFacultad)}
+                      style={{ fontSize: '0.8rem' }}
+                    >
+                      {isAddingNewFacultad ? 'Cancelar' : '+ Agregar Nueva Facultad'}
+                    </button>
+                  </div>
+
+                  {isAddingNewFacultad ? (
+                    <div className="new-group-inline-form" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.4rem' }}>
+                      <input
+                        type="text"
+                        placeholder="Nombre de la facultad (ej. Facultad de Ciencias Sociales y Humanas)"
+                        value={newFacultadName}
+                        onChange={(e) => setNewFacultadName(e.target.value)}
+                        className="select-input"
+                        autoFocus
+                      />
+                      <input
+                        type="text"
+                        placeholder="Descripción de la facultad (opcional)"
+                        value={newFacultadDesc}
+                        onChange={(e) => setNewFacultadDesc(e.target.value)}
+                        className="select-input"
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.2rem' }}>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => setIsAddingNewFacultad(false)}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary btn-sm"
+                          onClick={handleCreateNewFacultadInDb}
+                          disabled={addingFacultadSubmitting || !newFacultadName.trim()}
+                        >
+                          {addingFacultadSubmitting ? 'Guardando...' : 'Guardar en BD'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      id="id_facultad_programa"
+                      value={formData.id_facultad_programa}
+                      onChange={(e) => setFormData({ ...formData, id_facultad_programa: e.target.value })}
+                      className="select-input"
+                      style={{ marginTop: '0.35rem' }}
+                    >
+                      <option value="">-- Sin facultad asignada --</option>
+                      {facultadesList
+                        .filter(f => f.id !== 2 && f.id !== 3)
+                        .map(f => (
+                          <option key={f.id} value={f.id}>
+                            {f.nombre || f.Nombre}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                  <small className="form-hint">
+                    Las electivas especializadas en el pensum se mostrarán exclusivamente según la facultad seleccionada aquí.
+                  </small>
+                </div>
 
                 <div className="form-group">
                   <label htmlFor="numero_semestre">Número de Semestres de la Carrera *</label>

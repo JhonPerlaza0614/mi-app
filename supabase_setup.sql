@@ -12,8 +12,19 @@
 -- Tabla de Asignaturas
 CREATE TABLE IF NOT EXISTS public.asignaturas (
     code_course VARCHAR(50) PRIMARY KEY,
-    name_course VARCHAR(150) NOT NULL
+    name_course VARCHAR(150) NOT NULL,
+    credits INT DEFAULT 0,
+    is_elective BOOLEAN DEFAULT false,
+    es_complementaria BOOLEAN DEFAULT false,
+    es_basica BOOLEAN DEFAULT false,
+    facultad VARCHAR(150),
+    id_facultad INT
 );
+
+-- Asegurar que las columnas existan si la tabla ya estaba creada previamente
+ALTER TABLE public.asignaturas ADD COLUMN IF NOT EXISTS es_complementaria BOOLEAN DEFAULT false;
+ALTER TABLE public.asignaturas ADD COLUMN IF NOT EXISTS es_basica BOOLEAN DEFAULT false;
+
 
 -- Tabla de Programas Académicos (Carreras)
 CREATE TABLE IF NOT EXISTS public.programas (
@@ -27,10 +38,19 @@ CREATE TABLE IF NOT EXISTS public.pensum_academico (
     code_program VARCHAR(50) NOT NULL,
     code_course VARCHAR(50) NOT NULL,
     semestre INT NOT NULL,
+    is_elective BOOLEAN DEFAULT false,
+    facultad VARCHAR(150),
     
     PRIMARY KEY (code_program, code_course),
     FOREIGN KEY (code_program) REFERENCES public.programas(code_program) ON DELETE CASCADE,
     FOREIGN KEY (code_course) REFERENCES public.asignaturas(code_course) ON DELETE CASCADE
+);
+
+-- Tabla de Facultades ("Facultad" con id, nombre, descripcion)
+CREATE TABLE IF NOT EXISTS public."Facultad" (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    descripcion TEXT
 );
 
 -- Índices para optimización de consultas
@@ -143,6 +163,3 @@ CREATE TRIGGER trg_normalizar_programas
     FOR EACH ROW
     EXECUTE FUNCTION public.fn_normalizar_programas();
 
-
-    END IF;
-END $$;
