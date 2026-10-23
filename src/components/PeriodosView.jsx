@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Edit3, ExternalLink, Plus, Save, X } from 'lucide-react'
-import { createPeriodo, getPeriodos, updatePeriodo } from '../services/academicService'
+import { createPeriodo, deletePeriodo, getPeriodos, updatePeriodo } from '../services/academicService'
 
 const emptyForm = {
   nombre: '',
@@ -128,6 +128,17 @@ export default function PeriodosView({ user, onShowToast }) {
 
   const vigente = useMemo(() => periodos.find((periodo) => periodo.vigente), [periodos])
 
+  const handleDelete = async (periodo) => {
+    if (!window.confirm(`¿Está seguro que desea eliminar el período ${periodo.nombre}?\n\nEl sistema quedará sin período vigente y los plazos de docentes y coordinadores se cerrarán`)) return
+    try {
+      await deletePeriodo(periodo.id)
+      onShowToast('Período eliminado', 'success')
+      await load()
+    } catch (error) {
+      onShowToast(error.message || 'No se pudo eliminar el período', 'error')
+    }
+  }
+
   if (editing) {
     return (
       <section className="periodos-container">
@@ -152,10 +163,13 @@ export default function PeriodosView({ user, onShowToast }) {
         <div className="periodos-list">
           {periodos.map((periodo) => (
             <article className={`periodo-card${periodo.vigente ? ' vigente' : ''}`} key={periodo.id}>
-              <div><span className="periodo-status">{periodo.vigente ? 'VIGENTE' : 'HISTORIAL'}</span><h2>{periodo.nombre}</h2><p>Resolución {periodo.numeroResolucion} · Semestre: {periodo.fechaInicioSemestre} a {periodo.fechaFinSemestre}</p></div>
+              <div><span className="periodo-status">{periodo.estado || (periodo.vigente ? 'VIGENTE' : 'HISTORIAL')}</span><h2>{periodo.nombre}</h2><p>Resolución {periodo.numeroResolucion} · Semestre: {periodo.fechaInicioSemestre} a {periodo.fechaFinSemestre}</p></div>
               <div className="periodo-card-actions">
                 {periodo.enlaceResolucion && <a href={periodo.enlaceResolucion} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Resolución</a>}
-                {isAdmin && periodo.vigente && <button className="btn-secondary" onClick={() => setEditing(periodo)}><Edit3 size={16} /> Editar</button>}
+                {isAdmin && periodo.vigente && <>
+                  <button className="btn-secondary" onClick={() => setEditing(periodo)}><Edit3 size={16} /> Editar</button>
+                  <button className="btn-secondary" onClick={() => handleDelete(periodo)}>Eliminar</button>
+                </>}
               </div>
             </article>
           ))}

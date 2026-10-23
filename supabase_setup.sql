@@ -10,6 +10,7 @@ CREATE TABLE public.asignaturas (
   es_complementaria boolean DEFAULT false,
   es_basica boolean DEFAULT false,
   facultad character varying,
+  activo boolean NOT NULL DEFAULT true,
   CONSTRAINT asignaturas_pkey PRIMARY KEY (code_course),
   CONSTRAINT asignaturas_id_facultad_fkey FOREIGN KEY (id_facultad) REFERENCES public.Facultad(id)
 );
@@ -27,6 +28,7 @@ CREATE TABLE public.pensum_academico (
   semestre integer NOT NULL,
   facultad character varying,
   is_elective boolean,
+  activo boolean NOT NULL DEFAULT true,
   CONSTRAINT pensum_academico_code_course_fkey FOREIGN KEY (code_course) REFERENCES public.asignaturas(code_course),
   CONSTRAINT pensum_academico_code_program_fkey FOREIGN KEY (code_program) REFERENCES public.programas(code_program)
 );
@@ -111,4 +113,62 @@ CREATE TABLE public.docentes (
   CONSTRAINT docentes_pkey PRIMARY KEY (id),
   CONSTRAINT fk_docentes_programa FOREIGN KEY (code_program) REFERENCES public.programas(code_program)
 );
+CREATE TABLE public.periodos (
+  id bigint NOT NULL DEFAULT nextval('periodos_id_seq'::regclass),
+  nombre character varying NOT NULL,
+  estado character varying NOT NULL CHECK (estado::text = ANY (ARRAY['VIGENTE'::character varying, 'HISTORICO'::character varying, 'DESACTIVADO'::character varying]::text[])),
+  numero_resolucion character varying,
+  enlace_resolucion character varying,
+  inicio_semestre date NOT NULL,
+  fin_semestre date NOT NULL,
+  fecha_adicion date,
+  fecha_cancelacion date,
+  plazo_docentes_inicio timestamp with time zone,
+  plazo_docentes_fin timestamp with time zone,
+  plazo_coordinadores_inicio timestamp with time zone,
+  plazo_coordinadores_fin timestamp with time zone,
+  fecha_desactivacion timestamp with time zone,
+  CONSTRAINT periodos_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.disponibilidades_docentes (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  id_docente integer,
+  dia integer NOT NULL,
+  hora_inicio time without time zone,
+  hora_fin time without time zone,
+  CONSTRAINT disponibilidades_docentes_pkey PRIMARY KEY (id),
+  CONSTRAINT disponibilidades_docentes_id_docente_fkey FOREIGN KEY (id_docente) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.periodos_academicos (
+  id bigint NOT NULL DEFAULT nextval('periodos_academicos_id_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  numero_resolucion character varying NOT NULL UNIQUE,
+  fecha_resolucion date NOT NULL,
+  fecha_inicio_semestre date NOT NULL,
+  fecha_fin_semestre date NOT NULL,
+  fecha_adicion_inicio date NOT NULL,
+  fecha_adicion_fin date NOT NULL,
+  fecha_cancelacion_inicio date NOT NULL,
+  fecha_cancelacion_fin date NOT NULL,
+  plazo_docente_inicio timestamp with time zone NOT NULL,
+  plazo_docente_fin timestamp with time zone NOT NULL,
+  plazo_coordinador_inicio timestamp with time zone,
+  plazo_coordinador_fin timestamp with time zone,
+  enlace_resolucion text,
+  vigente boolean NOT NULL DEFAULT true,
+  estado character varying NOT NULL DEFAULT 'VIGENTE' CHECK (estado IN ('VIGENTE', 'HISTORIAL', 'DESACTIVADO')),
+  version bigint NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT periodos_academicos_pkey PRIMARY KEY (id)
+);
 
+ALTER TABLE public.disponibilidades_docentes
+  ADD COLUMN IF NOT EXISTS periodo_id bigint;
+
+ALTER TABLE public.disponibilidades_docentes
+  ADD CONSTRAINT fk_disponibilidad_periodo
+  FOREIGN KEY (periodo_id) REFERENCES public.periodos_academicos(id);
+
+CREATE INDEX IF NOT EXISTS ix_disponibilidad_docente_periodo
+  ON public.disponibilidades_docentes (id_docente, periodo_id, dia, hora_inicio);

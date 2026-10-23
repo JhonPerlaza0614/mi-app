@@ -1,14 +1,16 @@
 import React from 'react'
-import { GraduationCap, BookOpen, Library, Layers, LogOut, Users, CalendarDays } from 'lucide-react'
+import { GraduationCap, BookOpen, Library, Layers, LogOut, Users, CalendarDays, CalendarClock } from 'lucide-react'
 
 export default function Navbar({ activeTab, setActiveTab, isConnected, user, onLogout }) {
   const rol = user?.rol ?? 1 // 1: Admin, 2: Coordinador, 3: Docente
+  const isDocente = rol === 3
 
   const canSeePensum = rol === 1 || rol === 2
   const canSeeProgramas = rol === 1
   const canSeeAsignaturas = rol === 1 || rol === 2
   const canSeePlantilla = rol === 1
   const canSeePeriodos = rol === 1 || rol === 2 || rol === 3
+  const canSeeDisponibilidad = rol === 3
 
   const rolLabel = rol === 1 
     ? 'Administrador' 
@@ -85,6 +87,15 @@ export default function Navbar({ activeTab, setActiveTab, isConnected, user, onL
             >
               <CalendarDays size={18} />
               <span>Períodos académicos</span>
+            </button>
+          )}
+          {canSeeDisponibilidad && (
+            <button
+              className={`nav-tab-btn ${activeTab === 'disponibilidad' ? 'active' : ''}`}
+              onClick={() => setActiveTab('disponibilidad')}
+            >
+              <CalendarClock size={18} />
+              <span>Disponibilidad</span>
             </button>
           )}
         </nav>

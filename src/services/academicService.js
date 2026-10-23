@@ -78,6 +78,21 @@ export async function updatePeriodo(id, periodo) {
   })
 }
 
+export async function deletePeriodo(id) {
+  return requestBackend(`/periodos/${id}`, { method: 'DELETE' })
+}
+
+export async function getMyAvailability() {
+  return requestBackend('/disponibilidades/me')
+}
+
+export async function createAvailability(horario) {
+  return requestBackend('/disponibilidades/me', {
+    method: 'POST',
+    body: JSON.stringify(horario),
+  })
+}
+
 export async function createPrograma(programa) {
   try {
     const payload = {

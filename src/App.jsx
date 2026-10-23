@@ -5,6 +5,7 @@ import ProgramasView from './components/ProgramasView'
 import AsignaturasView from './components/AsignaturasView'
 import PlantillaView from './components/PlantillaView'
 import PeriodosView from './components/PeriodosView'
+import DisponibilidadView from './components/DisponibilidadView'
 import SqlSetupModal from './components/SqlSetupModal'
 import Toast from './components/Toast'
 import { 
@@ -20,7 +21,7 @@ export default function App({ user, onLogout }) {
   const isAdmin = user?.rol === 1
   const isDocente = user?.rol === 3
   const canSeeAcademicData = user?.rol === 1 || user?.rol === 2
-  const [activeTab, setActiveTab] = useState(isAdmin || user?.rol === 2 ? 'pensum' : 'periodos')
+  const [activeTab, setActiveTab] = useState(isAdmin || user?.rol === 2 ? 'pensum' : 'disponibilidad')
   const [programas, setProgramas] = useState([])
   const [asignaturas, setAsignaturas] = useState([])
   const [pensumList, setPensumList] = useState([])
@@ -190,6 +191,9 @@ export default function App({ user, onLogout }) {
           <>
             {activeTab === 'periodos' && (
               <PeriodosView user={user} onShowToast={showToast} />
+            )}
+            {activeTab === 'disponibilidad' && isDocente && (
+              <DisponibilidadView onShowToast={showToast} />
             )}
             {activeTab === 'pensum' && (
               <PensumView
