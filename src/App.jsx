@@ -4,6 +4,7 @@ import PensumView from './components/PensumView'
 import ProgramasView from './components/ProgramasView'
 import AsignaturasView from './components/AsignaturasView'
 import PlantillaView from './components/PlantillaView'
+import PeriodosView from './components/PeriodosView'
 import DedicatedInProgressView from './components/DedicatedInProgressView'
 import MiPerfilView from './components/MiPerfilView'
 import SqlSetupModal from './components/SqlSetupModal'
@@ -18,9 +19,18 @@ import { AlertCircle, Database, RefreshCw, Sparkles, Clock } from 'lucide-react'
 import './App.css'
 
 export default function App({ user, onLogout }) {
-  const isAdmin = user?.rol === 1
-  const canSeeAcademicData = user?.rol === 1 || user?.rol === 2
-  const [activeTab, setActiveTab] = useState(isAdmin || user?.rol === 2 ? 'pensum' : 'periodos')
+  const rol = user?.rol ?? 1 // 1: Admin, 2: Coordinador, 3: Docente
+  const isAdmin = rol === 1
+  const isCoordinador = rol === 2
+  const isDocente = rol === 3
+  const canSeeAcademicData = isAdmin || isCoordinador
+
+  // Docentes entran directamente a su portal dedicado
+  const [activeTab, setActiveTab] = useState(() => {
+    if (isDocente) return 'docente_portal'
+    return 'pensum'
+  })
+
   const [programas, setProgramas] = useState([])
   const [asignaturas, setAsignaturas] = useState([])
   const [pensumList, setPensumList] = useState([])
@@ -38,7 +48,6 @@ export default function App({ user, onLogout }) {
 
   // Carga global de datos desde Backend / Supabase
   const loadData = useCallback(async (isSilent = false) => {
-    // Si es docente, no consulta los endpoints administrativos protegidos
     if (isDocente) {
       setLoading(false)
       return
@@ -51,7 +60,7 @@ export default function App({ user, onLogout }) {
       const health = await checkDatabaseHealth()
       setIsConnected(health.connected)
 
-      // Cargar en paralelo
+      // Cargar en paralelo datos académicos si tiene permisos
       const [progs, asigs, pensum] = canSeeAcademicData
         ? await Promise.all([getProgramas(), getAsignaturas(), getAllPensum()])
         : [[], [], []]
@@ -85,7 +94,7 @@ export default function App({ user, onLogout }) {
     } finally {
       if (!isSilent) setLoading(false)
     }
-  }, [canSeeAcademicData])
+  }, [canSeeAcademicData, isDocente])
 
   useEffect(() => {
     let isMounted = true
@@ -137,7 +146,7 @@ export default function App({ user, onLogout }) {
     return () => {
       isMounted = false
     }
-  }, [canSeeAcademicData])
+  }, [canSeeAcademicData, isDocente])
 
   const handleSelectProgramForPensum = (code) => {
     setSelectedProgramCode(code)
@@ -208,9 +217,21 @@ export default function App({ user, onLogout }) {
           </div>
         ) : (
           <>
+            {/* Vistas Dedicadas en Progreso de Creación para Docentes y Coordinadores */}
+            {(activeTab === 'docente_portal' || activeTab === 'coordinador_portal') && (
+              <DedicatedInProgressView
+                user={user}
+                onNavigate={setActiveTab}
+                onLogout={onLogout}
+              />
+            )}
+
+            {/* Períodos Académicos (Resolución de Calendario) */}
             {activeTab === 'periodos' && (
               <PeriodosView user={user} onShowToast={showToast} />
             )}
+
+            {/* Malla Curricular */}
             {activeTab === 'pensum' && (
               <PensumView
                 programas={programas}
@@ -255,6 +276,7 @@ export default function App({ user, onLogout }) {
               />
             )}
 
+            {/* Mi Perfil */}
             {activeTab === 'mi-perfil' && (
               <MiPerfilView
                 user={user}
