@@ -2591,68 +2591,6 @@
    ESTILOS: VISTAS DEDICADAS EN PROGRESO DE CREACIÓN (DOCENTES Y COORDINADORES)
    ========================================================================== */
 
-.coordinador-info-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  background: linear-gradient(135deg, rgba(200, 16, 46, 0.12) 0%, rgba(31, 41, 55, 0.85) 100%);
-  border: 1px solid rgba(200, 16, 46, 0.35);
-  border-radius: 10px;
-  padding: 12px 20px;
-  margin: 16px 24px 0 24px;
-  animation: fadeInBanner 0.3s ease;
-}
-
-@keyframes fadeInBanner {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.coordinador-info-banner .banner-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #f3f4f6;
-  font-size: 0.92rem;
-}
-
-.coordinador-info-banner .banner-icon {
-  color: #f87171;
-  flex-shrink: 0;
-}
-
-.coordinador-info-banner .banner-text strong {
-  color: #ffffff;
-  font-weight: 600;
-}
-
-.coordinador-info-banner .banner-subtext {
-  color: #9ca3af;
-}
-
-.btn-banner-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(200, 16, 46, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(200, 16, 46, 0.4);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.btn-banner-link:hover {
-  background: rgba(200, 16, 46, 0.35);
-  color: #ffffff;
-  border-color: #ef4444;
-}
-
 .dedicated-progress-wrapper {
   min-height: calc(100vh - 120px);
   display: flex;

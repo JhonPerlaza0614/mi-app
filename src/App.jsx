@@ -13,11 +13,12 @@ import {
   getAllPensum, 
   checkDatabaseHealth 
 } from './services/academicService'
-import { AlertCircle, Database, RefreshCw, Sparkles, Clock } from 'lucide-react'
+import { AlertCircle, Database, RefreshCw } from 'lucide-react'
 import './App.css'
 
 export default function App({ user, onLogout }) {
   const isAdmin = user?.rol === 1
+  const isDocente = user?.rol === 3
   const canSeeAcademicData = user?.rol === 1 || user?.rol === 2
   const [activeTab, setActiveTab] = useState(isAdmin || user?.rol === 2 ? 'pensum' : 'periodos')
   const [programas, setProgramas] = useState([])
@@ -154,26 +155,6 @@ export default function App({ user, onLogout }) {
         user={user}
         onLogout={onLogout}
       />
-
-      {/* Banner de aviso para Coordinador cuando navega en asignaturas o pensum */}
-      {isCoordinador && (activeTab === 'pensum' || activeTab === 'asignaturas') && (
-        <div className="coordinador-info-banner">
-          <div className="banner-content">
-            <Sparkles size={18} className="banner-icon" />
-            <div className="banner-text">
-              <strong>Páginas dedicadas en progreso de creación</strong>
-              <span className="banner-subtext"> — Tu cuenta de Coordinador(a) tiene acceso de consulta a Mallas Curriculares y Banco de Asignaturas.</span>
-            </div>
-          </div>
-          <button 
-            type="button" 
-            className="btn-banner-link"
-            onClick={() => setActiveTab('coordinador_portal')}
-          >
-            <Clock size={14} /> Ver Estado del Portal
-          </button>
-        </div>
-      )}
 
       {/* Alerta si ocurre un error de RLS o configuración */}
       {initialError && !isDocente && (
