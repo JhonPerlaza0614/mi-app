@@ -147,6 +147,63 @@
   font-size: .72rem;
 }
 
+.periodos-container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.periodos-heading, .periodo-form-actions, .periodo-card, .periodo-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.periodos-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin: .3rem 0 1.5rem;
+}
+
+.section-eyebrow {
+  color: #93c5fd;
+  font-size: .75rem;
+  letter-spacing: .12em;
+  margin: 0;
+}
+
+.periodos-list { display: grid; gap: 1rem; }
+.periodo-card {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.periodo-card.vigente { border-color: #60a5fa; }
+.periodo-card h2 { margin: .4rem 0; color: #f9fafb; }
+.periodo-card p, .periodo-note { color: #9ca3af; }
+.periodo-status { color: #93c5fd; font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+.periodo-card-actions a { color: #93c5fd; display: inline-flex; align-items: center; gap: .35rem; }
+.periodo-form {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.periodo-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.periodo-form label { display: grid; gap: .4rem; color: #d1d5db; font-size: .85rem; }
+.periodo-form input { background: #111827; border: 1px solid #4b5563; border-radius: 6px; color: #f9fafb; padding: .65rem; }
+.periodo-form-wide { grid-column: 1 / -1; }
+.periodo-form-actions { justify-content: flex-end; margin-top: 1.5rem; }
+
+@media (max-width: 760px) {
+  .periodo-form-grid { grid-template-columns: 1fr; }
+  .periodo-form-wide { grid-column: auto; }
+  .periodo-card, .periodos-heading { align-items: flex-start; flex-direction: column; }
+}
+
 .navbar-logout-btn {
   display: inline-flex;
   align-items: center;

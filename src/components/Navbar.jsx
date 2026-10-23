@@ -1,5 +1,5 @@
 import React from 'react'
-import { GraduationCap, BookOpen, Library, Layers, LogOut, Users, Clock } from 'lucide-react'
+import { GraduationCap, BookOpen, Library, Layers, LogOut, Users, CalendarDays } from 'lucide-react'
 
 export default function Navbar({ activeTab, setActiveTab, isConnected, user, onLogout }) {
   const rol = user?.rol ?? 1 // 1: Admin, 2: Coordinador, 3: Docente
@@ -8,8 +8,7 @@ export default function Navbar({ activeTab, setActiveTab, isConnected, user, onL
   const canSeeProgramas = rol === 1
   const canSeeAsignaturas = rol === 1 || rol === 2
   const canSeePlantilla = rol === 1
-  const isCoordinador = rol === 2
-  const isDocente = rol === 3
+  const canSeePeriodos = rol === 1 || rol === 2 || rol === 3
 
   const rolLabel = rol === 1 
     ? 'Administrador' 
@@ -28,7 +27,7 @@ export default function Navbar({ activeTab, setActiveTab, isConnected, user, onL
   return (
     <header className="navbar">
       <div className="navbar-container">
-        <div className="navbar-brand" onClick={handleBrandClick}>
+        <div className="navbar-brand" onClick={() => setActiveTab(canSeePensum ? 'pensum' : 'periodos')}>
           <div className="brand-icon-bg">
             <GraduationCap size={24} className="brand-icon" />
           </div>
@@ -79,23 +78,13 @@ export default function Navbar({ activeTab, setActiveTab, isConnected, user, onL
             </button>
           )}
 
-          {isCoordinador && (
+          {canSeePeriodos && (
             <button
-              className={`nav-tab-btn ${activeTab === 'coordinador_portal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('coordinador_portal')}
+              className={`nav-tab-btn ${activeTab === 'periodos' ? 'active' : ''}`}
+              onClick={() => setActiveTab('periodos')}
             >
-              <Clock size={18} />
-              <span>Portal Coordinador</span>
-            </button>
-          )}
-
-          {isDocente && (
-            <button
-              className={`nav-tab-btn ${activeTab === 'docente_portal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('docente_portal')}
-            >
-              <Clock size={18} />
-              <span>Portal Docente</span>
+              <CalendarDays size={18} />
+              <span>Períodos académicos</span>
             </button>
           )}
         </nav>

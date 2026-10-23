@@ -4,7 +4,7 @@ import PensumView from './components/PensumView'
 import ProgramasView from './components/ProgramasView'
 import AsignaturasView from './components/AsignaturasView'
 import PlantillaView from './components/PlantillaView'
-import DedicatedInProgressView from './components/DedicatedInProgressView'
+import PeriodosView from './components/PeriodosView'
 import SqlSetupModal from './components/SqlSetupModal'
 import Toast from './components/Toast'
 import { 
@@ -17,16 +17,9 @@ import { AlertCircle, Database, RefreshCw, Sparkles, Clock } from 'lucide-react'
 import './App.css'
 
 export default function App({ user, onLogout }) {
-  const rol = user?.rol ?? 1 // 1: Admin, 2: Coordinador, 3: Docente
-  const isDocente = rol === 3
-  const isCoordinador = rol === 2
-
-  // Docentes entran directamente a su portal dedicado
-  const [activeTab, setActiveTab] = useState(() => {
-    if (isDocente) return 'docente_portal'
-    return 'pensum'
-  })
-
+  const isAdmin = user?.rol === 1
+  const canSeeAcademicData = user?.rol === 1 || user?.rol === 2
+  const [activeTab, setActiveTab] = useState(isAdmin || user?.rol === 2 ? 'pensum' : 'periodos')
   const [programas, setProgramas] = useState([])
   const [asignaturas, setAsignaturas] = useState([])
   const [pensumList, setPensumList] = useState([])
@@ -57,12 +50,10 @@ export default function App({ user, onLogout }) {
       const health = await checkDatabaseHealth()
       setIsConnected(health.connected)
 
-      // Cargar en paralelo datos académicos
-      const [progs, asigs, pensum] = await Promise.all([
-        getProgramas(),
-        getAsignaturas(),
-        getAllPensum(),
-      ])
+      // Cargar en paralelo
+      const [progs, asigs, pensum] = canSeeAcademicData
+        ? await Promise.all([getProgramas(), getAsignaturas(), getAllPensum()])
+        : [[], [], []]
 
       // Asociar nombres y créditos de asignaturas al pensum
       const asigMap = new Map(asigs.map(a => [a.code_course, a]))
@@ -93,7 +84,7 @@ export default function App({ user, onLogout }) {
     } finally {
       if (!isSilent) setLoading(false)
     }
-  }, [isDocente])
+  }, [canSeeAcademicData])
 
   useEffect(() => {
     let isMounted = true
@@ -109,11 +100,9 @@ export default function App({ user, onLogout }) {
         if (!isMounted) return
         setIsConnected(health.connected)
 
-        const [progs, asigs, pensum] = await Promise.all([
-          getProgramas(),
-          getAsignaturas(),
-          getAllPensum(),
-        ])
+        const [progs, asigs, pensum] = canSeeAcademicData
+          ? await Promise.all([getProgramas(), getAsignaturas(), getAllPensum()])
+          : [[], [], []]
         if (!isMounted) return
 
         const asigMap = new Map(asigs.map(a => [a.code_course, a]))
@@ -147,7 +136,7 @@ export default function App({ user, onLogout }) {
     return () => {
       isMounted = false
     }
-  }, [isDocente])
+  }, [canSeeAcademicData])
 
   const handleSelectProgramForPensum = (code) => {
     setSelectedProgramCode(code)
@@ -218,16 +207,9 @@ export default function App({ user, onLogout }) {
           </div>
         ) : (
           <>
-            {/* Vistas Dedicadas en Progreso de Creación para Docentes y Coordinadores */}
-            {(activeTab === 'docente_portal' || activeTab === 'coordinador_portal') && (
-              <DedicatedInProgressView
-                user={user}
-                onNavigate={setActiveTab}
-                onLogout={onLogout}
-              />
+            {activeTab === 'periodos' && (
+              <PeriodosView user={user} onShowToast={showToast} />
             )}
-
-            {/* Malla Curricular */}
             {activeTab === 'pensum' && (
               <PensumView
                 programas={programas}

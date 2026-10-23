@@ -55,6 +55,27 @@ export async function getProgramas() {
     if (error) throw error
     return data || []
   }
+
+}
+
+// --- PERIODOS ACADEMICOS (HU-002 / HU-003) ---
+
+export async function getPeriodos() {
+  return requestBackend('/periodos')
+}
+
+export async function createPeriodo(periodo) {
+  return requestBackend('/periodos', {
+    method: 'POST',
+    body: JSON.stringify(periodo),
+  })
+}
+
+export async function updatePeriodo(id, periodo) {
+  return requestBackend(`/periodos/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(periodo),
+  })
 }
 
 export async function createPrograma(programa) {
